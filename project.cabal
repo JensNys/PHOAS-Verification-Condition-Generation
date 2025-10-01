@@ -52,7 +52,6 @@ extra-doc-files:    CHANGELOG.md
 
 common warnings
     ghc-options: -Wall
-
 executable project
     -- Import common warning flags.
     import:           warnings
@@ -67,7 +66,10 @@ executable project
     -- other-extensions:
 
     -- Other library packages from which modules are imported.
-    build-depends:    base ^>=4.17.2.1
+    build-depends:    
+        base ^>=4.17.2.1,
+        containers,
+        mtl
 
     -- Directories containing source files.
     hs-source-dirs:   app

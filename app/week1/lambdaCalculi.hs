@@ -1,5 +1,6 @@
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-{-# HLINT ignore "Use camelCase" #-}
+module LambdaCalculi where
+--{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+--{-# HLINT ignore "Use camelCase" #-}
 import Test.HUnit
 import Test.QuickCheck
 
