@@ -1,6 +1,7 @@
 
 import Data.Map as M
 import Control.Monad.State
+import Control.Monad.Cont
 -- here we define the program syntax and its semantics. 
 -- we also define the syntax and semantics for logic variables
 
@@ -118,6 +119,18 @@ data Prop = T
     | Implies Prop Prop
     | Exist (Const->Prop) 
     | Forall (Const->Prop)
+
+type Wpure a = Cont Prop
+type L = String -- logic variables
+
+data Contract = MkContract [L] Prop Prog (Int->Prop) -- forAll logicVariables {Precondition} Program {Int->Postcondition}
+
+
+
+
+absoluteValueContract :: Contract
+absoluteValueContract = MkContract ["x"] T absoluteValue (\x -> Cmp GreaterThan x 0)
+
 
 
 
