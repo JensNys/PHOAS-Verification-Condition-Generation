@@ -120,7 +120,7 @@ data Prop = T
     | Exist (Const->Prop) 
     | Forall (Const->Prop)
 
-type Wpure a = Cont Prop
+
 type L = String -- logic variables
 
 data Contract = MkContract [L] Prop Prog (Int->Prop) -- forAll logicVariables {Precondition} Program {Int->Postcondition}
@@ -130,6 +130,64 @@ data Contract = MkContract [L] Prop Prog (Int->Prop) -- forAll logicVariables {P
 
 absoluteValueContract :: Contract
 absoluteValueContract = MkContract ["x"] T absoluteValue (\x -> Cmp GreaterThan x 0)
+
+
+newtype Wpure a = Wpure {runWpure :: (a->Prop)->Prop} 
+instance Functor Wpure where
+  fmap = liftM
+
+instance Applicative Wpure where
+  pure a = Wpure $ (\post->post a)
+  (<*>) = ap
+instance Monad Wpure where
+    return = pure
+    c >>= k = Wpure $ (\post-> (runWpure c) (\a->runWpure (k a) post))
+
+
+block :: Wpure a
+block = Wpure $ (\post->T)
+
+fail :: Wpure a
+fail = Wpure $ (\post->F)
+
+angelic :: Wpure Const
+angelic = Wpure $ (\post-> Exist (\v->post v))
+
+demonic :: Wpure Const
+demonic = Wpure $ (\post-> Forall (\v->post v))
+
+add :: Wpure a->Wpure a -> Wpure a
+add m1 m2 = Wpure $ (\post -> Or ((runWpure m1) post) ((runWpure m2) post))
+
+multiply :: Wpure a->Wpure a -> Wpure a
+multiply m1 m2 = Wpure $ (\post -> And ((runWpure m1) post) ((runWpure m2) post))
+
+assert :: Prop -> Wpure ()
+assert p = Wpure $ (\post -> And p (post ()))
+
+assume :: Prop -> Wpure ()
+assume p =Wpure $ (\post -> Implies p (post ()))
+
+
+
+
+
+type Wstore a = (a->Valuation->Prop)->Valuation->Prop
+-- what Add another Prop for failure?
+-- TODO monad instance
+
+---
+evalStore :: Wstore a -> Valuation -> Wpure a
+evalStore m store = Wpure $ (\post-> m (\a store'->post a) store)
+
+
+push :: X->Const->Wstore ()
+push x v = (\post store-> post () (insert x v store))
+
+pop :: Wstore ()
+pop = (\post store -> post () store)
+
+
 
 
 
