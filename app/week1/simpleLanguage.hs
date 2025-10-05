@@ -2,16 +2,17 @@
 
 module SimpleLanguage where
 import Data.Map
-type Var = String
 
+type Var = String
 type Const = Int
+type Valuation = Map Var Const
 
 data Exp = EConst Const
     | EVar Var
     | Add Exp Exp
     | Mul Exp Exp
     deriving (Show)
-type Valuation = Map Var Const
+
 
 data Command = Skip | Assign Var Exp | Seq Command Command |Repeat Exp Command
     deriving (Show)

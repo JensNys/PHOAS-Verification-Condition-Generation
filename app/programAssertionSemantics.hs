@@ -1,6 +1,7 @@
-
+module ProgramAssertions where
 import Data.Map as M
 import Control.Monad.State
+import Control.Monad.Trans.Maybe
 import Control.Monad.Cont
 -- here we define the program syntax and its semantics. 
 -- we also define the syntax and semantics for logic variables
@@ -77,8 +78,12 @@ interp (Min s1 s2) = do x <- interp s1
 interp (Assign var s) = do x <- interp s -- it changes the variable in the valuation and
                            putMap var x --i don't use monad put here for now because it would return () instead of an integer. I could add in a later stage that it returns () but i have to take into account that computations "() + 4" would return a failed computation Nothing
 interp (Let var s1 s2) = do x <- interp s1 -- p -- in a later stage we could let this computation fail if x is already a variable.
+                            oldState <- get
                             _ <- putMap var x
-                            interp s2
+                            result <- interp s2
+                            put oldState
+                            return result
+
 interp (Seq s1 s2) =do _ <- interp s1
                        interp s2
 interp (If bexp s1 s2) = do b <- interpb bexp
@@ -91,6 +96,10 @@ add_5_to_1_with_var = Let "x" (Lit 5) (Add (Var "x") (Lit 1))
 
 testingScope :: Stm
 testingScope = Let "x" (Lit 5) (Seq (Assign "x" (Lit 1)) (Var "x"))
+
+testingScope2 :: Stm
+testingScope2 = Seq (Let "x" (Lit 5) (Lit 5)) (Lit 7)
+
 
 absoluteValueStm :: Stm 
 absoluteValueStm = Let "x" (Lit (-5)) (If (Compare LessThan (Var "x") (Lit 0)) (Min (Lit 0) (Var "x")) (Var "x"))
@@ -110,6 +119,8 @@ runStatement s = (runStateT (interp s) empty)
 
 
 ------------------------------------------------------------------------------------------------
+-- we define the syntax for Assertions
+
 
 data Prop = T 
     | F 
@@ -139,6 +150,7 @@ instance Functor Wpure where
 instance Applicative Wpure where
   pure a = Wpure $ (\post->post a)
   (<*>) = ap
+
 instance Monad Wpure where
     return = pure
     c >>= k = Wpure $ (\post-> (runWpure c) (\a->runWpure (k a) post))
@@ -166,16 +178,16 @@ assert :: Prop -> Wpure ()
 assert p = Wpure $ (\post -> And p (post ()))
 
 assume :: Prop -> Wpure ()
-assume p =Wpure $ (\post -> Implies p (post ()))
+assume p = Wpure $ (\post -> Implies p (post ()))
 
 
 
 
 
 type Wstore a = (a->Valuation->Prop)->Valuation->Prop
--- what Add another Prop for failure?
+-- TODO Add another Prop for failure?
 -- TODO monad instance
-
+type MWstore a = StateT Valuation (MaybeT (Cont Prop))
 ---
 evalStore :: Wstore a -> Valuation -> Wpure a
 evalStore m store = Wpure $ (\post-> m (\a store'->post a) store)
@@ -186,8 +198,6 @@ push x v = (\post store-> post () (insert x v store))
 
 pop :: Wstore ()
 pop = (\post store -> post () store)
-
-
 
 
 
