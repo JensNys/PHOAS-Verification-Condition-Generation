@@ -69,7 +69,10 @@ executable project
     build-depends:    
         base ^>=4.17.2.1,
         containers,
-        mtl
+        mtl,
+        HUnit,
+        transformers
+        
 
     -- Directories containing source files.
     hs-source-dirs:   app

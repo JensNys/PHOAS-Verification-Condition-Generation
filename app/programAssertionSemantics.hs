@@ -1,4 +1,4 @@
-module ProgramAssertions where
+module ProgramAssertionSemantics where
 import Data.Map as M
 import Control.Monad.State
 import Control.Monad.Trans.Maybe
