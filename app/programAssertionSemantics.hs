@@ -63,7 +63,7 @@ interpb (Compare op s1 s2) = do x <- interp s1
 -- this is a naive version where i don't use monad functionality 
 -- Stm -> Valuation -> Maybe (Const, Valuation)
 interp :: Stm -> StateT Valuation Maybe Const
-interp (Lit c) = state  (\v->(c,v))
+interp (Lit c) = return c
 interp (Var a) = lookupVar a
 interp (Add s1 s2) = do x <- interp s1
                         y <- interp s2
@@ -140,7 +140,8 @@ data Contract = MkContract [L] Prop Prog (Int->Prop) -- forAll logicVariables {P
 
 
 absoluteValueContract :: Contract
-absoluteValueContract = MkContract ["x"] T absoluteValue (\x -> Cmp GreaterThan x 0)
+--absoluteValueContract = MkContract ["x"] T absoluteValue (\x -> And (Cmp GreaterThan x 0) (Cmp GreaterThanEqual "x" x))
+absoluteValueContract = MkContract ["x"] T absoluteValue (\x -> And (Cmp GreaterThan x 0) (T))
 
 
 newtype Wpure a = Wpure {runWpure :: (a->Prop)->Prop} 
@@ -162,11 +163,11 @@ block = Wpure $ (\post->T)
 fail :: Wpure a
 fail = Wpure $ (\post->F)
 
-angelic :: Wpure Const
-angelic = Wpure $ (\post-> Exist (\v->post v))
+angelic :: Maybe String -> Wpure Const
+angelic _ = Wpure $ (\post-> Exist (\v->post v))
 
-demonic :: Wpure Const
-demonic = Wpure $ (\post-> Forall (\v->post v))
+demonic :: Maybe String -> Wpure Const
+demonic _ = Wpure $ (\post-> Forall (\v->post v))
 
 add :: Wpure a->Wpure a -> Wpure a
 add m1 m2 = Wpure $ (\post -> Or ((runWpure m1) post) ((runWpure m2) post))
@@ -184,13 +185,29 @@ assume p = Wpure $ (\post -> Implies p (post ()))
 
 
 
-type Wstore a = (a->Valuation->Prop)->Valuation->Prop
+newtype Wstore a =Wstore {runWstore :: (a->Valuation->Prop)->Valuation->Prop}
+instance Functor Wstore where
+  fmap = liftM
+instance Applicative Wstore where
+  pure a = Wstore $ (\post store->post a store)
+  (<*>) = ap
+
+instance Monad Wstore where
+    return = pure
+    c >>= k = Wstore $ (\post store1-> (runWstore c) (\a store2->runWstore (k a) post store2) store1)
+
+
+
+{- 
 -- TODO Add another Prop for failure?
 -- TODO monad instance
 type MWstore a = StateT Valuation (MaybeT (Cont Prop))
 ---
 evalStore :: Wstore a -> Valuation -> Wpure a
 evalStore m store = Wpure $ (\post-> m (\a store'->post a) store)
+
+--evalStore' :: Wstore a -> Valuation -> Wpure a
+--evalStore' m store = Wpure $ (\post-> (runStateT m) store (\a ->post (fst a)))
 
 
 push :: X->Const->Wstore ()
@@ -202,3 +219,4 @@ pop = (\post store -> post () store)
 
 
 
+ -}
