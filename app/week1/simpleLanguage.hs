@@ -97,9 +97,3 @@ semant v (Or a1 a2) = (semant v a1) || (semant v a2)
 
 -- this doens't typecheck because i give [Int] instead of [a]. If it would typecheck it still wouldn't work because I can't interpret ex. (LVar 10) to 10, I can only interpret LVar a if a is an integer but i can't enforce that in lInterp. Even if that worked, it wouldn't terminate if there is no integer that satisfies the statement.
 --semant v (Exist f) = any ((semant v) . f) ints
-
-
-
-
-
-
