@@ -1,15 +1,13 @@
 module ProgramAssertionSemantics where
-import Data.Map as M
 import Control.Monad.State
 import Control.Monad.Trans.Maybe
 import Control.Monad.Cont
 -- here we define the program syntax and its semantics. 
 -- we also define the syntax and semantics for logic variables
 
-type Var = String
+--type Var = String
 type Const = Int
-type Valuation = Map Var Const
-
+type Store = [(X,Const)]
 --program variables. They are immutable location
 type X = String
 --function names
@@ -36,17 +34,26 @@ data Stm = Lit Const
 -- this is the same type as Stm-> Valuation ->Maybe Const
 -- interp ::Stm -> ReaderT Valuation Maybe Integer
 
-
-lookupVar:: Var->StateT Valuation Maybe Const
-lookupVar var = do env <- get
-                   case (M.lookup var env) of
-                        Just a -> return a
-                        Nothing -> lift Nothing
+delete ::Eq a => a-> [(a,b)]-> [(a,b)]
+delete _ [] = []
+delete a ((a',b):xs) = if (a'==a) then xs else (a',b):(delete a xs)
 
 
 
-putMap :: Var->Const -> StateT Valuation Maybe Const
-putMap var c = state (\m -> (c,insert var c m))
+lookupVarS:: X->StateT Store Maybe Const
+lookupVarS var = do env <- get
+                    case (lookup var env) of
+                         Just a -> return a
+                         Nothing -> lift Nothing
+putS :: X->Const -> StateT Store Maybe Const
+putS var c = state (\m -> (c,(var,c):m))
+
+pop :: StateT Store Maybe Const
+pop = state (\m -> (snd (head m),tail m))
+
+remove :: X-> StateT Store Maybe ()
+remove x = state (\m -> ((),delete x m))
+
                 
 toFunc :: Relop -> (Int->Int->Bool)
 toFunc Equal = (==)
@@ -56,15 +63,17 @@ toFunc NotEqual = (/=)
 toFunc LessThanEqual = (<=)
 toFunc GreaterThanEqual = (>=)
 
-interpb :: Bexp -> StateT Valuation Maybe Bool
+interpb :: Bexp -> StateT Store Maybe Bool
 interpb (Compare op s1 s2) = do x <- interp s1
                                 y <- interp s2
                                 return ((toFunc op) x y)
 -- this is a naive version where i don't use monad functionality 
 -- Stm -> Valuation -> Maybe (Const, Valuation)
-interp :: Stm -> StateT Valuation Maybe Const
+
+    
+interp :: Stm -> StateT Store Maybe Const
 interp (Lit c) = return c
-interp (Var a) = lookupVar a
+interp (Var a) = lookupVarS a
 interp (Add s1 s2) = do x <- interp s1
                         y <- interp s2
                         return (x+y)
@@ -74,23 +83,26 @@ interp (Mul s1 s2) = do x <- interp s1
 interp (Min s1 s2) = do x <- interp s1
                         y <- interp s2
                         return (x-y)
-
 interp (Assign var s) = do x <- interp s -- it changes the variable in the valuation and
-                           putMap var x --i don't use monad put here for now because it would return () instead of an integer. I could add in a later stage that it returns () but i have to take into account that computations "() + 4" would return a failed computation Nothing
+                           putS var x --i don't use monad put here for now because it would return () instead of an integer. I could add in a later stage that it returns () but i have to take into account that computations "() + 4" would return a failed computation Nothing
 interp (Let var s1 s2) = do x <- interp s1 -- p -- in a later stage we could let this computation fail if x is already a variable.
-                            oldState <- get
-                            _ <- putMap var x
+                            _ <- putS var x
                             result <- interp s2
-                            put oldState
+                            remove var
                             return result
-
 interp (Seq s1 s2) =do _ <- interp s1
                        interp s2
 interp (If bexp s1 s2) = do b <- interpb bexp
                             if b then (interp s1) else (interp s2)
-    
 
 
+
+
+
+
+
+
+-- examples
 add_5_to_1_with_var :: Stm
 add_5_to_1_with_var = Let "x" (Lit 5) (Add (Var "x") (Lit 1))
 
@@ -111,11 +123,11 @@ absoluteValue = Fun "abs" ["x"] (If (Compare LessThan (Var "x") (Lit 0)) (Min (L
 
 -- Program -> Parameters -> executed program.
 exec :: Prog -> [Const]-> Maybe Const
-exec (Fun _ l s) pars = fmap fst (runStateT (interp s) (fromList (zip l pars)))
+exec (Fun _ l s) pars = fmap fst (runStateT (interp s) ((zip l pars)))
 
 
-runStatement :: Stm -> Maybe (Const,Valuation)
-runStatement s = (runStateT (interp s) empty) 
+runStatement :: Stm -> Maybe (Const,Store)
+runStatement s = (runStateT (interp s) []) 
 
 
 ------------------------------------------------------------------------------------------------
@@ -158,10 +170,10 @@ instance Monad Wpure where
 
 
 block :: Wpure a
-block = Wpure $ (\post->T)
+block = Wpure $ (\_->T)
 
 fail :: Wpure a
-fail = Wpure $ (\post->F)
+fail = Wpure $ (\_->F)
 
 angelic :: Maybe String -> Wpure Const
 angelic _ = Wpure $ (\post-> Exist (\v->post v))
@@ -185,7 +197,7 @@ assume p = Wpure $ (\post -> Implies p (post ()))
 
 
 
-newtype Wstore a =Wstore {runWstore :: (a->Valuation->Prop)->Valuation->Prop}
+newtype Wstore a =Wstore {runWstore :: (a->Store->Prop)->Store->Prop}
 instance Functor Wstore where
   fmap = liftM
 instance Applicative Wstore where
