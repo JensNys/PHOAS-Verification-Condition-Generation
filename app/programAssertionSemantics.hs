@@ -48,6 +48,14 @@ lookupVarS var = do env <- get
 putS :: X->Const -> StateT Store Maybe Const
 putS var c = state (\m -> (c,(var,c):m))
 
+change :: Eq a => a->b-> [(a,b)]-> [(a,b)]
+change _ _ [] = []
+change a b ((a',b'):xs) = if (a==a') then ((a',b):xs) else ((a',b'):(change a b xs))
+
+assign :: X->Const -> StateT Store Maybe Const
+assign var c = state (\m -> (c,change var c m))
+
+
 pop :: StateT Store Maybe Const
 pop = state (\m -> (snd (head m),tail m))
 
@@ -84,7 +92,7 @@ interp (Min s1 s2) = do x <- interp s1
                         y <- interp s2
                         return (x-y)
 interp (Assign var s) = do x <- interp s -- it changes the variable in the valuation and
-                           putS var x --i don't use monad put here for now because it would return () instead of an integer. I could add in a later stage that it returns () but i have to take into account that computations "() + 4" would return a failed computation Nothing
+                           assign var x --i don't use monad put here for now because it would return () instead of an integer. I could add in a later stage that it returns () but i have to take into account that computations "() + 4" would return a failed computation Nothing
 interp (Let var s1 s2) = do x <- interp s1 -- p -- in a later stage we could let this computation fail if x is already a variable.
                             _ <- putS var x
                             result <- interp s2
@@ -112,6 +120,8 @@ testingScope = Let "x" (Lit 5) (Seq (Assign "x" (Lit 1)) (Var "x"))
 testingScope2 :: Stm
 testingScope2 = Seq (Let "x" (Lit 5) (Lit 5)) (Lit 7)
 
+testingScope3 :: Stm
+testingScope3 = Let "y" (Lit 2) (Let "x" (Lit 3) (Seq (Let "y" (Lit 4) (Assign "x" (Lit 2))) (Add (Var "x") (Var "y"))))
 
 absoluteValueStm :: Stm 
 absoluteValueStm = Let "x" (Lit (-5)) (If (Compare LessThan (Var "x") (Lit 0)) (Min (Lit 0) (Var "x")) (Var "x"))
