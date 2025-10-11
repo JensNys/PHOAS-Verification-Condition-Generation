@@ -27,7 +27,7 @@ data Stm = Lit Value
     | Var X
     | Add Stm Stm
     | Mul Stm Stm
-    | Min Stm Stm
+    | Minus Stm Stm
     | Assign X Stm -- x := Stm (update a variable)
     | Let X Stm Stm -- let X = Stm where Stm (make a new variable)
     | Seq Stm Stm --e1;e2
@@ -102,9 +102,9 @@ interp (Add s1 s2) = do x <- interp s1
 interp (Mul s1 s2) = do x <- interp s1
                         y <- interp s2
                         return (x*y)
-interp (Min s1 s2) = do x <- interp s1
-                        y <- interp s2
-                        return (x-y)
+interp (Minus s1 s2) = do x <- interp s1
+                          y <- interp s2
+                          return (x-y)
 interp (Assign var s) = do x <- interp s -- it changes the variable in the valuation and
                            assign var x --i don't use monad put here for now because it would return () instead of an integer. I could add in a later stage that it returns () but i have to take into account that computations "() + 4" would return a failed computation Nothing
 interp (Let var s1 s2) = do x <- interp s1 -- p -- in a later stage we could let this computation fail if x is already a variable.
@@ -138,16 +138,16 @@ testingScope3 :: Stm
 testingScope3 = Let "y" (Lit 2) (Let "x" (Lit 3) (Seq (Let "y" (Lit 4) (Assign "x" (Lit 2))) (Add (Var "x") (Var "y"))))
 
 absoluteValueStm :: Stm 
-absoluteValueStm = Let "x" (Lit (-5)) (If (Compare LessThan (Var "x") (Lit 0)) (Min (Lit 0) (Var "x")) (Var "x"))
+absoluteValueStm = Let "x" (Lit (-5)) (If (Compare LessThan (Var "x") (Lit 0)) (Minus (Lit 0) (Var "x")) (Var "x"))
 
 
 absoluteValue :: Prog
-absoluteValue = Fun "abs" ["x"] (If (Compare LessThan (Var "x") (Lit 0)) (Min (Lit 0) (Var "x")) (Var "x"))
+absoluteValue = Fun "abs" ["x"] (If (Compare LessThan (Var "x") (Lit 0)) (Minus (Lit 0) (Var "x")) (Var "x"))
 
 
 -- Program -> Parameters -> executed program.
-exec :: Prog -> [Value]-> Maybe Value
-exec (Fun _ l s) pars = fmap fst (runStateT (interp s) ((zip l pars)))
+execute :: Prog -> [Value]-> Maybe Value
+execute (Fun _ l s) pars = fmap fst (runStateT (interp s) ((zip l pars)))
 
 
 runStatement :: Stm -> Maybe (Value,Store)
@@ -290,6 +290,44 @@ matchBool_demonic v m1 m2= (do assert (Eq v True);m1)
 assignWstore :: X->Value->Wstore ()
 assignWstore x v = Wstore $ (\post store->post () (change x v store))
 
+lookupWstore :: X->Wstore Value
+lookupWstore a = Wstore $ (\post store->case (Prelude.lookup a store) of
+                                                Nothing -> F
+                                                Just value -> post value store)
+
+execb :: Bexp->Wstore Bool
+execb (Compare op s1 s2) = do x <- exec s1
+                              y <- exec s2
+                              return ((toFunc op) x y)
+
+exec :: Stm->Wstore Value
+exec (Lit c) = return c
+exec (Var a) = lookupWstore a
+exec (Add s1 s2) = do x <- exec s1
+                      y <- exec s2
+                      return (x+y)
+exec (Mul s1 s2) = do x <- exec s1
+                      y <- exec s2
+                      return (x*y)
+exec (Minus s1 s2) = do x <- exec s1
+                        y <- exec s2
+                        return (x-y)
+exec (Assign var s) = do v <-exec s 
+                         assignWstore var v
+                         return v
+exec (Let var s1 s2) = do x <- exec s1 -- p -- in a later stage we could let this computation fail if x is already a variable.
+                          pushStore var x
+                          result <- exec s2
+                          popStore
+                          return result
+exec (Seq s1 s2) = do _ <- exec s1
+                      exec s2
+exec (If bexp s1 s2) = do b <- execb bexp
+                          matchBool_angelic b (exec s1) (exec s2)
+
+
+
+
 --matchsum :: Value ->
 
 {- 
@@ -322,5 +360,5 @@ monadMorphism ::  StateT Store Maybe a->Wstore a
 monadMorphism r = Wstore $ (\post s0-> case ((runStateT r) s0) of 
                                           Nothing -> F
                                           Just (a,store) -> post a store)
-  
+
   
