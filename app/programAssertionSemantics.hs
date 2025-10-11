@@ -35,9 +35,22 @@ data Stm = Lit Value
 -- this is the same type as Stm-> Valuation ->Maybe Value
 -- interp ::Stm -> ReaderT Valuation Maybe Integer
 
-deleteS ::Eq a => a-> [(a,b)]-> [(a,b)]
-deleteS _ [] = []
-deleteS a ((a',b):xs) = if (a'==a) then xs else (a',b):(deleteS a xs)
+deleteL ::Eq a => a-> [(a,b)]-> [(a,b)]
+deleteL _ [] = []
+deleteL a ((a',b):xs) = if (a'==a) then xs else (a',b):(deleteL a xs)
+
+change :: Eq a => a->b-> [(a,b)]-> [(a,b)]
+change _ _ [] = []
+change a b ((a',b'):xs) = if (a==a') then ((a',b):xs) else ((a',b'):(change a b xs))
+
+pushL :: Eq a => a->b-> [(a,b)]-> [(a,b)]
+pushL _ _ [] = []
+pushL a b l = (a,b):l
+
+popL :: Eq a => [(a,b)]-> [(a,b)]
+popL [] = []
+popL ((_,_):l) = l
+
 
 
 
@@ -49,9 +62,7 @@ lookupVarS var = do env <- get
 putS :: X->Value -> StateT Store Maybe Value
 putS var c = state (\m -> (c,(var,c):m))
 
-change :: Eq a => a->b-> [(a,b)]-> [(a,b)]
-change _ _ [] = []
-change a b ((a',b'):xs) = if (a==a') then ((a',b):xs) else ((a',b'):(change a b xs))
+
 
 assign :: X->Value -> StateT Store Maybe Value
 assign var c = state (\m -> (c,change var c m))
@@ -61,7 +72,7 @@ pop :: StateT Store Maybe Value
 pop = state (\m -> (snd (head m),tail m))
 
 remove :: X-> StateT Store Maybe ()
-remove x = state (\m -> ((),deleteS x m))
+remove x = state (\m -> ((),deleteL x m))
 
                 
 toFunc :: Relop -> (Int->Int->Bool)
@@ -222,7 +233,14 @@ instance Monad Wstore where
     return = pure
     c >>= k = Wstore $ (\post store1-> (runWstore c) (\a store2->runWstore (k a) post store2) store1)
 
+evalStore :: Wstore a ->Store-> Wpure a 
+evalStore m store = Wpure $ (\post-> (runWstore m) (\a _->post a) store)
 
+pushStore :: X->Value -> Wstore ()
+pushStore x v = Wstore $ (\post store->post () (pushL x v store))
+
+popStore :: Wstore ()
+popStore = Wstore $ (\post store -> post () (popL store))
 
 {- 
 -- TODO Add another Prop for failure?
