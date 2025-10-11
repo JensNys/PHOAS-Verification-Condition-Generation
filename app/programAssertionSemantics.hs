@@ -2,12 +2,13 @@ module ProgramAssertionSemantics where
 import Control.Monad.State
 import Control.Monad.Trans.Maybe
 import Control.Monad.Cont
+import Data.Map as M
 -- here we define the program syntax and its semantics. 
 -- we also define the syntax and semantics for logic variables
 
 --type Var = String
-type Const = Int
-type Store = [(X,Const)]
+type Value = Int
+type Store = [(X,Value)]
 --program variables. They are immutable location
 type X = String
 --function names
@@ -20,7 +21,7 @@ data Relop = Equal | LessThan | GreaterThan | NotEqual | LessThanEqual | Greater
 
 data Bexp = Compare Relop Stm Stm
 
-data Stm = Lit Const
+data Stm = Lit Value
     | Var X
     | Add Stm Stm
     | Mul Stm Stm
@@ -31,36 +32,36 @@ data Stm = Lit Const
     | If Bexp Stm Stm -- if bexp then stm else stm
 
 
--- this is the same type as Stm-> Valuation ->Maybe Const
+-- this is the same type as Stm-> Valuation ->Maybe Value
 -- interp ::Stm -> ReaderT Valuation Maybe Integer
 
-delete ::Eq a => a-> [(a,b)]-> [(a,b)]
-delete _ [] = []
-delete a ((a',b):xs) = if (a'==a) then xs else (a',b):(delete a xs)
+deleteS ::Eq a => a-> [(a,b)]-> [(a,b)]
+deleteS _ [] = []
+deleteS a ((a',b):xs) = if (a'==a) then xs else (a',b):(deleteS a xs)
 
 
 
-lookupVarS:: X->StateT Store Maybe Const
+lookupVarS:: X->StateT Store Maybe Value
 lookupVarS var = do env <- get
-                    case (lookup var env) of
+                    case (Prelude.lookup var env) of
                          Just a -> return a
                          Nothing -> lift Nothing
-putS :: X->Const -> StateT Store Maybe Const
+putS :: X->Value -> StateT Store Maybe Value
 putS var c = state (\m -> (c,(var,c):m))
 
 change :: Eq a => a->b-> [(a,b)]-> [(a,b)]
 change _ _ [] = []
 change a b ((a',b'):xs) = if (a==a') then ((a',b):xs) else ((a',b'):(change a b xs))
 
-assign :: X->Const -> StateT Store Maybe Const
+assign :: X->Value -> StateT Store Maybe Value
 assign var c = state (\m -> (c,change var c m))
 
 
-pop :: StateT Store Maybe Const
+pop :: StateT Store Maybe Value
 pop = state (\m -> (snd (head m),tail m))
 
 remove :: X-> StateT Store Maybe ()
-remove x = state (\m -> ((),delete x m))
+remove x = state (\m -> ((),deleteS x m))
 
                 
 toFunc :: Relop -> (Int->Int->Bool)
@@ -76,10 +77,10 @@ interpb (Compare op s1 s2) = do x <- interp s1
                                 y <- interp s2
                                 return ((toFunc op) x y)
 -- this is a naive version where i don't use monad functionality 
--- Stm -> Valuation -> Maybe (Const, Valuation)
+-- Stm -> Valuation -> Maybe (Value, Valuation)
 
     
-interp :: Stm -> StateT Store Maybe Const
+interp :: Stm -> StateT Store Maybe Value
 interp (Lit c) = return c
 interp (Var a) = lookupVarS a
 interp (Add s1 s2) = do x <- interp s1
@@ -132,11 +133,11 @@ absoluteValue = Fun "abs" ["x"] (If (Compare LessThan (Var "x") (Lit 0)) (Min (L
 
 
 -- Program -> Parameters -> executed program.
-exec :: Prog -> [Const]-> Maybe Const
+exec :: Prog -> [Value]-> Maybe Value
 exec (Fun _ l s) pars = fmap fst (runStateT (interp s) ((zip l pars)))
 
 
-runStatement :: Stm -> Maybe (Const,Store)
+runStatement :: Stm -> Maybe (Value,Store)
 runStatement s = (runStateT (interp s) []) 
 
 
@@ -150,21 +151,24 @@ data Prop = T
     | And Prop Prop 
     | Or Prop Prop 
     | Implies Prop Prop
-    | Exist (Const->Prop) 
-    | Forall (Const->Prop)
+    | Exist (Value->Prop) 
+    | Forall (Value->Prop)
 
 
-type L = String -- logic variables
+type LVar = String -- logic variables
+type Valuation = M.Map LVar Value
 
-data Contract = MkContract [L] Prop Prog (Int->Prop) -- forAll logicVariables {Precondition} Program {Int->Postcondition}
 
+
+data Contract = ForallC (Value -> Contract) -- forAll logicVariables {Precondition} Program {Int->Postcondition}
+    | HoareTriple Prop Prog [Value] (Value->Prop)
 
 
 
 absoluteValueContract :: Contract
---absoluteValueContract = MkContract ["x"] T absoluteValue (\x -> And (Cmp GreaterThan x 0) (Cmp GreaterThanEqual "x" x))
-absoluteValueContract = MkContract ["x"] T absoluteValue (\x -> And (Cmp GreaterThan x 0) (T))
-
+--absoluteValueContract = MkContract ["x"] T absoluteValue (\x -> )
+--absoluteValueContract = MkContract ["x"] T absoluteValue (\x -> And (Cmp GreaterThan x 0) (T))
+absoluteValueContract = ForallC (\x->HoareTriple T absoluteValue [x] (\result->And (Cmp GreaterThan result 0) (Cmp GreaterThanEqual result x)))
 
 newtype Wpure a = Wpure {runWpure :: (a->Prop)->Prop} 
 instance Functor Wpure where
@@ -185,10 +189,10 @@ block = Wpure $ (\_->T)
 fail :: Wpure a
 fail = Wpure $ (\_->F)
 
-angelic :: Maybe String -> Wpure Const
+angelic :: Maybe String -> Wpure Value
 angelic _ = Wpure $ (\post-> Exist (\v->post v))
 
-demonic :: Maybe String -> Wpure Const
+demonic :: Maybe String -> Wpure Value
 demonic _ = Wpure $ (\post-> Forall (\v->post v))
 
 add :: Wpure a->Wpure a -> Wpure a
@@ -232,7 +236,7 @@ evalStore m store = Wpure $ (\post-> m (\a store'->post a) store)
 --evalStore' m store = Wpure $ (\post-> (runStateT m) store (\a ->post (fst a)))
 
 
-push :: X->Const->Wstore ()
+push :: X->Value->Wstore ()
 push x v = (\post store-> post () (insert x v store))
 
 pop :: Wstore ()
