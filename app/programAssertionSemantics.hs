@@ -1,7 +1,7 @@
 module ProgramAssertionSemantics where
 import Control.Monad.State
 import Control.Monad.Trans.Maybe
-import Control.Monad.Cont
+--import Control.Monad.Cont
 import Data.Map as M
 -- here we define the program syntax and its semantics. 
 -- we also define the syntax and semantics for logic variables
@@ -154,7 +154,6 @@ data Prop = T
     | Exist (Value->Prop) 
     | Forall (Value->Prop)
 
-
 type LVar = String -- logic variables
 type Valuation = M.Map LVar Value
 
@@ -195,11 +194,12 @@ angelic _ = Wpure $ (\post-> Exist (\v->post v))
 demonic :: Maybe String -> Wpure Value
 demonic _ = Wpure $ (\post-> Forall (\v->post v))
 
-add :: Wpure a->Wpure a -> Wpure a
-add m1 m2 = Wpure $ (\post -> Or ((runWpure m1) post) ((runWpure m2) post))
+-- unicode 2295
+(⊕) :: Wpure a->Wpure a -> Wpure a
+m1 ⊕ m2 = Wpure $ (\post -> Or ((runWpure m1) post) ((runWpure m2) post))
 
-multiply :: Wpure a->Wpure a -> Wpure a
-multiply m1 m2 = Wpure $ (\post -> And ((runWpure m1) post) ((runWpure m2) post))
+(⊗) :: Wpure a->Wpure a -> Wpure a
+m1 ⊗ m2 = Wpure $ (\post -> And ((runWpure m1) post) ((runWpure m2) post))
 
 assert :: Prop -> Wpure ()
 assert p = Wpure $ (\post -> And p (post ()))
