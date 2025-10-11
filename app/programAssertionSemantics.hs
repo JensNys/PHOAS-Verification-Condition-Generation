@@ -328,37 +328,19 @@ exec (If bexp s1 s2) = do b <- execb bexp
 
 
 
---matchsum :: Value ->
-
-{- 
--- TODO Add another Prop for failure?
--- TODO monad instance
-type MWstore a = StateT Valuation (MaybeT (Cont Prop))
----
-evalStore :: Wstore a -> Valuation -> Wpure a
-evalStore m store = Wpure $ (\post-> m (\a store'->post a) store)
-
---evalStore' :: Wstore a -> Valuation -> Wpure a
---evalStore' m store = Wpure $ (\post-> (runStateT m) store (\a ->post (fst a)))
-
-
-push :: X->Value->Wstore ()
-push x v = (\post store-> post () (insert x v store))
-
-pop :: Wstore ()
-pop = (\post store -> post () store)
-
-
-
-
- -}
-
-
 
 -- with normal state: θ St(m) = λpost s0. post (m s0)
-monadMorphism ::  StateT Store Maybe a->Wstore a 
-monadMorphism r = Wstore $ (\post s0-> case ((runStateT r) s0) of 
+-- total correctness interpretation by doing F
+observationTotal ::  StateT Store Maybe a->Wstore a 
+observationTotal r = Wstore $ (\post s0-> case ((runStateT r) s0) of 
                                           Nothing -> F
+                                          Just (a,store) -> post a store)
+
+-- with normal state: θ St(m) = λpost s0. post (m s0)
+-- partial correctness interpretation by doing T
+observationPartial ::  StateT Store Maybe a->Wstore a 
+observationPartial r = Wstore $ (\post s0-> case ((runStateT r) s0) of 
+                                          Nothing -> T
                                           Just (a,store) -> post a store)
 
   

@@ -1,8 +1,8 @@
+{-# LANGUAGE RankNTypes  #-}
 module LambdaCalculi where
 --{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 --{-# HLINT ignore "Use camelCase" #-}
 import Test.HUnit
-import Test.QuickCheck
 
 data Foas_Exp = Var String
     | Lambda String Foas_Exp
@@ -21,9 +21,12 @@ class UntypedLambda exp where
     lam :: (exp -> exp) -> exp
     app :: exp -> exp -> exp 
 
-type Hoas = forall a. UntypedLambda a => a
+type Phoas = forall a. UntypedLambda a => a
 
-
+data DBTerm = DBVar Int
+    | DBLam DBTerm
+    | DBApp DBTerm DBTerm
+    deriving (Show,Eq)
 
 
 
@@ -48,8 +51,11 @@ hoasI = HLambda (\x->x)
 phoasI :: Phoas_Exp a
 phoasI = PLambda (\x->PVar x)
 
-typeclass_hoasI :: Hoas
+typeclass_hoasI :: Phoas
 typeclass_hoasI = lam (\x->x)
+
+deBruinI :: DBTerm
+deBruinI = DBLam (DBVar 0)
 
 
 --combinator B (function composition) for the term 
@@ -62,10 +68,11 @@ hoasB = HLambda (\x->HLambda (\y->HLambda (\z->HApp x (HApp y z))))
 phoasB :: Phoas_Exp a
 phoasB = PLambda (\x->PLambda (\y->PLambda (\z->PApp (PVar x) (PApp (PVar y) (PVar z)))))
 
-typeclass_hoasB :: Hoas
+typeclass_hoasB :: Phoas
 typeclass_hoasB = lam (\x->lam (\y->lam (\z->app x (app y z))))
 
-
+deBruinB :: DBTerm
+deBruinB = DBLam (DBLam (DBLam (DBApp (DBVar 2) (DBApp (DBVar 1) (DBVar 0)))))
 
 -- Y combinator = λf. (λx. f (x x)) (λx. f (x x))
 foasY :: Foas_Exp
@@ -86,10 +93,11 @@ hoas_example = HApp (HLambda (\x-> HLambda (\y -> HApp x y))) (HLambda id)
 phoas_example :: Phoas_Exp a
 phoas_example = PApp (PLambda (\x-> PLambda (\y -> PApp (PVar x) (PVar y)))) (PLambda (\z -> PVar z))
 
-typeclass_hoas_example :: Hoas
+typeclass_hoas_example :: Phoas
 typeclass_hoas_example = app (lam (\x->lam (\y-> app x y))) (lam (\z->z))
 
-
+deBruinExample :: DBTerm
+deBruinExample = DBApp (DBLam (DBLam (DBApp (DBVar 1) (DBVar 0)))) (DBLam (DBVar 0))
 
 
 
@@ -108,12 +116,12 @@ phoas_to_foas a = go (map (\i-> "x" ++ show i) [1..]) a
 
 -- typeclass version
 instance UntypedLambda Foas_Exp where
-    lam :: (Foas_Exp->Foas_Exp)->Foas_Exp
+    --lam :: (Foas_Exp->Foas_Exp)->Foas_Exp
     lam f = Lambda "x" (f (Var "x"))
-    app :: Foas_Exp->Foas_Exp->Foas_Exp
+    --app :: Foas_Exp->Foas_Exp->Foas_Exp
     app = App
 
-typeclass_hoas_to_foas :: Hoas-> Foas_Exp
+typeclass_hoas_to_foas :: Phoas-> Foas_Exp
 typeclass_hoas_to_foas hoas = hoas
 
 
@@ -158,3 +166,20 @@ betaReduce (App e1 e2) = substitute e2 e1
 
 run :: Foas_Exp -> Foas_Exp
 run a = if betaReduce a == a then a else run $ betaReduce a
+
+
+
+
+
+
+
+-----------------------------
+
+
+
+
+
+
+
+
+
