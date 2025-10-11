@@ -196,11 +196,7 @@ instance Monad Wpure where
     c >>= k = Wpure $ (\post-> (runWpure c) (\a->runWpure (k a) post))
 
 
-block :: Wpure a
-block = Wpure $ (\_->T)
 
-fail :: Wpure a
-fail = Wpure $ (\_->F)
 
 angelic :: Maybe String -> Wpure Value
 angelic _ = Wpure $ (\post-> Exist (\v->post v))
@@ -209,7 +205,15 @@ demonic :: Maybe String -> Wpure Value
 demonic _ = Wpure $ (\post-> Forall (\v->post v))
 
 -- unicode 2295
-{- (⊕) :: Wpure a->Wpure a -> Wpure a
+{- 
+block :: Wpure a
+block = Wpure $ (\_->T)
+
+fail :: Wpure a
+fail = Wpure $ (\_->F)
+
+
+(⊕) :: Wpure a->Wpure a -> Wpure a
 m1 ⊕ m2 = Wpure $ (\post -> Or ((runWpure m1) post) ((runWpure m2) post))
 
 (⊗) :: Wpure a->Wpure a -> Wpure a
@@ -236,6 +240,13 @@ instance Applicative Wstore where
 instance Monad Wstore where
     return = pure
     c >>= k = Wstore $ (\post store1-> (runWstore c) (\a store2->runWstore (k a) post store2) store1)
+
+
+block :: Wstore a
+block = Wstore $ (\_ _->T)
+
+fail :: Wstore a
+fail = Wstore $ (\_ _->F)
 
 -- unicode 2295
 (⊕) :: Wstore a->Wstore a -> Wstore a
@@ -275,6 +286,10 @@ matchBool_demonic v m1 m2= (do assert (Eq v True);m1)
                             ⊕
                            (do assert (Eq v False);m2)
 
+
+assignWstore :: X->Value->Wstore ()
+assignWstore x v = Wstore $ (\post store->post () (change x v store))
+
 --matchsum :: Value ->
 
 {- 
@@ -299,3 +314,13 @@ pop = (\post store -> post () store)
 
 
  -}
+
+
+
+-- with normal state: θ St(m) = λpost s0. post (m s0)
+monadMorphism ::  StateT Store Maybe a->Wstore a 
+monadMorphism r = Wstore $ (\post s0-> case ((runStateT r) s0) of 
+                                          Nothing -> F
+                                          Just (a,store) -> post a store)
+  
+  
