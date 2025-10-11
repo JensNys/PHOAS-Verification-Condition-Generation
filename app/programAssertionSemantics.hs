@@ -1,4 +1,6 @@
 module ProgramAssertionSemantics where
+
+
 import Control.Monad.State
 import Control.Monad.Trans.Maybe
 --import Control.Monad.Cont
@@ -158,7 +160,8 @@ runStatement s = (runStateT (interp s) [])
 
 data Prop = T 
     | F 
-    | Cmp Relop Int Int 
+    | Cmp Relop Value Value 
+    | Eq Bool Bool -- should this be Prop Prop?
     | And Prop Prop 
     | Or Prop Prop 
     | Implies Prop Prop
@@ -206,17 +209,18 @@ demonic :: Maybe String -> Wpure Value
 demonic _ = Wpure $ (\post-> Forall (\v->post v))
 
 -- unicode 2295
-(⊕) :: Wpure a->Wpure a -> Wpure a
+{- (⊕) :: Wpure a->Wpure a -> Wpure a
 m1 ⊕ m2 = Wpure $ (\post -> Or ((runWpure m1) post) ((runWpure m2) post))
 
 (⊗) :: Wpure a->Wpure a -> Wpure a
 m1 ⊗ m2 = Wpure $ (\post -> And ((runWpure m1) post) ((runWpure m2) post))
 
+
 assert :: Prop -> Wpure ()
-assert p = Wpure $ (\post -> And p (post ()))
+assert p = Wpure $ (\post store-> And p (post ()))
 
 assume :: Prop -> Wpure ()
-assume p = Wpure $ (\post -> Implies p (post ()))
+assume p = Wpure $ (\post -> Implies p (post ())) -}
 
 
 
@@ -233,6 +237,24 @@ instance Monad Wstore where
     return = pure
     c >>= k = Wstore $ (\post store1-> (runWstore c) (\a store2->runWstore (k a) post store2) store1)
 
+-- unicode 2295
+(⊕) :: Wstore a->Wstore a -> Wstore a
+m1 ⊕ m2 = Wstore $ (\post store-> Or ((runWstore m1) post store) ((runWstore m2) post store))
+
+(⊗) :: Wstore a->Wstore a -> Wstore a
+m1 ⊗ m2 = Wstore $ (\post store -> And ((runWstore m1) post store) ((runWstore m2) post store))
+
+
+assert :: Prop -> Wstore ()
+assert p = Wstore $ (\post store-> And p (post () store))
+
+assume :: Prop -> Wstore ()
+assume p = Wstore $ (\post store-> Implies p (post () store))
+
+
+
+
+
 evalStore :: Wstore a ->Store-> Wpure a 
 evalStore m store = Wpure $ (\post-> (runWstore m) (\a _->post a) store)
 
@@ -241,6 +263,19 @@ pushStore x v = Wstore $ (\post store->post () (pushL x v store))
 
 popStore :: Wstore ()
 popStore = Wstore $ (\post store -> post () (popL store))
+
+
+matchBool_angelic :: Bool-> Wstore a-> Wstore a-> Wstore a
+matchBool_angelic v m1 m2= (do assume (Eq v True);m1) 
+                            ⊗
+                           (do assume (Eq v False);m2)
+
+matchBool_demonic :: Bool-> Wstore a-> Wstore a-> Wstore a
+matchBool_demonic v m1 m2= (do assert (Eq v True);m1) 
+                            ⊕
+                           (do assert (Eq v False);m2)
+
+--matchsum :: Value ->
 
 {- 
 -- TODO Add another Prop for failure?
