@@ -1,8 +1,9 @@
+{-# LANGUAGE RankNTypes  #-}
 module ProgramAssertionSemantics where
 
 
 import Control.Monad.State
-import Control.Monad.Trans.Maybe
+--import Control.Monad.Trans.Maybe
 --import Control.Monad.Cont
 import Data.Map as M
 -- here we define the program syntax and its semantics. 
@@ -167,6 +168,19 @@ data Prop = T
     | Implies Prop Prop
     | Exist (Value->Prop) 
     | Forall (Value->Prop)
+
+class Proposition p where
+  true :: p
+  false :: p
+  cmp :: Relop->Value->Value->p
+  and :: Bool->Bool->p
+  or :: p->p->p
+  implies ::  p->p->p
+  exist :: (Value->p)->p
+  forAll :: (Value->p)->p
+
+type PhoasProp = forall a. Proposition a => a
+
 
 type LVar = String -- logic variables
 type Valuation = M.Map LVar Value
