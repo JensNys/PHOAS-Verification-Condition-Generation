@@ -5,8 +5,10 @@
 module LambdaCalculi where
 --{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 --{-# HLINT ignore "Use camelCase" #-}
-import Test.HUnit
+
 import Control.Monad.Reader
+import Control.Monad.State
+import Data.Char
 
 data Foas_Exp = Var String
     | Lambda String Foas_Exp
@@ -34,12 +36,12 @@ data DBTerm = DBVar Int
 
 
 
+prettify :: Foas_Exp->String
+prettify (Var str) = str
+prettify (Lambda str exp) = "(\\" ++ str ++ "." ++ (prettify exp) ++ ")"
+prettify (App l r) = (prettify l) ++ " " ++ (prettify r)
 
-
-
-
-
-
+prettyPrint = putStrLn . prettify
 
 
 
@@ -158,7 +160,7 @@ phoas_to_first (PApp l r)  = First $(\i->Var "x") -}
 
 instance UntypedLambda First where
     --lam :: (First->First)->First
-    lam f = First $ (\i-> Lambda ("x" ++ show i) (unFirst (f (First $ (\j->Var ("x" ++ show i)))) (i+1)))
+    lam f = First $ (\i-> Lambda ( [chr i]) (unFirst (f (First $ (\j->Var ("x" ++ show i)))) (i+1)))
     --app :: First->First->First
     app left right= First $ (\i->App (unFirst left i) (unFirst right i))
 
@@ -168,7 +170,7 @@ typeclass_phoas_to_first :: Phoas-> First
 typeclass_phoas_to_first hoas = hoas
 
 typeclass_phoas_to_foas :: First -> Foas_Exp
-typeclass_phoas_to_foas  hoas = unFirst hoas 0
+typeclass_phoas_to_foas  hoas = unFirst hoas 97
 
 
 type ReaderFirst = Reader Int Foas_Exp
@@ -181,7 +183,7 @@ phoas_to_first (PApp l r)  = First $(\i->Var "x") -}
 instance UntypedLambda ReaderFirst where
     --lam :: (First->First)->First
     lam f = do i <- ask
-               let arg = "x" ++ show i
+               let arg = [chr i]
                body <- local (+1) (f (return (Var arg)))
                return $ Lambda arg body
 
@@ -194,8 +196,29 @@ typeclass_phoas_to_readerfirst :: Phoas-> ReaderFirst
 typeclass_phoas_to_readerfirst phoas = phoas
 
 typeclass_phoas_to_readerfoas :: Phoas -> Foas_Exp
-typeclass_phoas_to_readerfoas phoas = runReader (typeclass_phoas_to_readerfirst phoas) 0
+typeclass_phoas_to_readerfoas phoas = runReader (typeclass_phoas_to_readerfirst phoas) 97
 
+type StateFirst = State Int Foas_Exp
+
+
+instance UntypedLambda StateFirst where
+    --lam :: (First->First)->First
+    lam f = do i <- get
+               let arg = [chr i]
+               put (i+1)
+               body <- f (return (Var arg))
+               return $ Lambda arg body
+
+    --app :: First->First->First
+    app left right = do l <- left
+                        r <- right
+                        return $ App l r
+
+typeclass_phoas_to_statefirst :: Phoas-> StateFirst
+typeclass_phoas_to_statefirst phoas = phoas
+
+typeclass_phoas_to_statefoas :: Phoas -> Foas_Exp
+typeclass_phoas_to_statefoas phoas = fst $ runState (typeclass_phoas_to_statefirst phoas) 97
 
 {- data Foas_Exp = Var String
     | Lambda String Foas_Exp
