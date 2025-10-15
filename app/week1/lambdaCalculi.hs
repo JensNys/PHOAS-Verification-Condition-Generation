@@ -1,8 +1,12 @@
 {-# LANGUAGE RankNTypes  #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances #-}
+
 module LambdaCalculi where
 --{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 --{-# HLINT ignore "Use camelCase" #-}
 import Test.HUnit
+import Control.Monad.Reader
 
 data Foas_Exp = Var String
     | Lambda String Foas_Exp
@@ -100,41 +104,6 @@ deBruinExample :: DBTerm
 deBruinExample = DBApp (DBLam (DBLam (DBApp (DBVar 1) (DBVar 0)))) (DBLam (DBVar 0))
 
 
-
--- conversion from phoas to first order representation
--- algebraic datatype version
-phoas_to_foas :: Phoas_Exp String -> Foas_Exp
-phoas_to_foas a = go (map (\i-> "x" ++ show i) [1..]) a
-    where 
-    go :: [String] -> Phoas_Exp String -> Foas_Exp
-    go l (PApp e1 e2) = App (go l e1) (go l e2)
-    go (x:xs) (PLambda f) = Lambda x (go xs (f x))
-    go l (PVar a) = Var a
-
--- problem: i have to instantiate the polymorphic parameter to String
-
-
--- typeclass version
-instance UntypedLambda Foas_Exp where
-    --lam :: (Foas_Exp->Foas_Exp)->Foas_Exp
-    lam f = Lambda "x" (f (Var "x"))
-    --app :: Foas_Exp->Foas_Exp->Foas_Exp
-    app = App
-
-typeclass_hoas_to_foas :: Phoas-> Foas_Exp
-typeclass_hoas_to_foas hoas = hoas
-
-
--- problem: all of the variables are named "x"
-
-
-
-
-
-
-
-
-
 --evaluation functions for foas representations
 
 --searches for the first lambda abstraction and substitutes its string with
@@ -170,11 +139,92 @@ run a = if betaReduce a == a then a else run $ betaReduce a
 
 
 
-
-
-
 -----------------------------
+-- conversions from phoas to foas in different ways
+{- newtype First = First {unFirst :: Int->Foas_Exp}
 
+phoas_to_first :: Phoas_Exp a->First
+phoas_to_first (PVar v)    = First $( \i->Var "x")
+phoas_to_first (PLambda f) =First $(\i->Var "x")
+phoas_to_first (PApp l r)  = First $(\i->Var "x") -}
+
+
+newtype First = First {unFirst :: Int->Foas_Exp}
+
+{- phoas_to_first :: Phoas_Exp a->First
+phoas_to_first (PVar v)    = First $( \i->Var "x")
+phoas_to_first (PLambda f) =First $(\i->Var "x")
+phoas_to_first (PApp l r)  = First $(\i->Var "x") -}
+
+instance UntypedLambda First where
+    --lam :: (First->First)->First
+    lam f = First $ (\i-> Lambda ("x" ++ show i) (unFirst (f (First $ (\j->Var ("x" ++ show i)))) (i+1)))
+    --app :: First->First->First
+    app left right= First $ (\i->App (unFirst left i) (unFirst right i))
+
+
+
+typeclass_phoas_to_first :: Phoas-> First
+typeclass_phoas_to_first hoas = hoas
+
+typeclass_phoas_to_foas :: First -> Foas_Exp
+typeclass_phoas_to_foas  hoas = unFirst hoas 0
+
+
+type ReaderFirst = Reader Int Foas_Exp
+
+{- phoas_to_first :: Phoas_Exp a->First
+phoas_to_first (PVar v)    = First $( \i->Var "x")
+phoas_to_first (PLambda f) =First $(\i->Var "x")
+phoas_to_first (PApp l r)  = First $(\i->Var "x") -}
+
+instance UntypedLambda ReaderFirst where
+    --lam :: (First->First)->First
+    lam f = do i <- ask
+               let arg = "x" ++ show i
+               body <- local (+1) (f (return (Var arg)))
+               return $ Lambda arg body
+
+    --app :: First->First->First
+    app left right = do l <- left
+                        r <- right
+                        return $ App l r
+
+typeclass_phoas_to_readerfirst :: Phoas-> ReaderFirst
+typeclass_phoas_to_readerfirst phoas = phoas
+
+typeclass_phoas_to_readerfoas :: Phoas -> Foas_Exp
+typeclass_phoas_to_readerfoas phoas = runReader (typeclass_phoas_to_readerfirst phoas) 0
+
+
+{- data Foas_Exp = Var String
+    | Lambda String Foas_Exp
+    | App Foas_Exp Foas_Exp
+    deriving (Eq,Show)
+
+data Hoas_Exp = HLambda (Hoas_Exp -> Hoas_Exp)
+    | HApp Hoas_Exp Hoas_Exp
+
+data Phoas_Exp a = PVar a
+    | PLambda (a -> Phoas_Exp a)
+    | PApp (Phoas_Exp a) (Phoas_Exp a) -}
+
+
+
+
+
+    
+-- conversion from phoas to first order representation
+-- algebraic datatype version
+phoas_to_foas :: Phoas_Exp String -> Foas_Exp
+phoas_to_foas a = go (map (\i-> "x" ++ show i) [1..]) a
+    where 
+    go :: [String] -> Phoas_Exp String -> Foas_Exp
+    go l (PApp e1 e2) = App (go l e1) (go l e2)
+    go (x:xs) (PLambda f) = Lambda x (go xs (f x))
+    go l (PVar a) = Var a
+
+-- problem: i have to instantiate the polymorphic parameter to String
 
 
 

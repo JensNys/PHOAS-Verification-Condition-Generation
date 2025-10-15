@@ -244,7 +244,7 @@ assume p = Wpure $ (\post -> Implies p (post ())) -}
 
 
 
-newtype Wstore a =Wstore {runWstore :: (a->Store->Prop)->Store->Prop}
+newtype Wstore a = Wstore {runWstore :: (a->Store->Prop)->Store->Prop}
 instance Functor Wstore where
   fmap = liftM
 instance Applicative Wstore where
