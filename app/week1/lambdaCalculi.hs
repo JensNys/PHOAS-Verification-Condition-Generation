@@ -160,7 +160,7 @@ phoas_to_first (PApp l r)  = First $(\i->Var "x") -}
 
 instance UntypedLambda First where
     --lam :: (First->First)->First
-    lam f = First $ (\i-> Lambda ( [chr i]) (unFirst (f (First $ (\j->Var ("x" ++ show i)))) (i+1)))
+    lam f = First $ (\i-> Lambda ( "x" ++ show i) (unFirst (f (First $ (\j->Var ("x" ++ show i)))) (i+1)))
     --app :: First->First->First
     app left right= First $ (\i->App (unFirst left i) (unFirst right i))
 
@@ -170,7 +170,7 @@ typeclass_phoas_to_first :: Phoas-> First
 typeclass_phoas_to_first hoas = hoas
 
 typeclass_phoas_to_foas :: First -> Foas_Exp
-typeclass_phoas_to_foas  hoas = unFirst hoas 97
+typeclass_phoas_to_foas  hoas = unFirst hoas 0
 
 
 type ReaderFirst = Reader Int Foas_Exp
@@ -183,7 +183,7 @@ phoas_to_first (PApp l r)  = First $(\i->Var "x") -}
 instance UntypedLambda ReaderFirst where
     --lam :: (First->First)->First
     lam f = do i <- ask
-               let arg = [chr i]
+               let arg = "x" ++ show i
                body <- local (+1) (f (return (Var arg)))
                return $ Lambda arg body
 
@@ -196,7 +196,7 @@ typeclass_phoas_to_readerfirst :: Phoas-> ReaderFirst
 typeclass_phoas_to_readerfirst phoas = phoas
 
 typeclass_phoas_to_readerfoas :: Phoas -> Foas_Exp
-typeclass_phoas_to_readerfoas phoas = runReader (typeclass_phoas_to_readerfirst phoas) 97
+typeclass_phoas_to_readerfoas phoas = runReader (typeclass_phoas_to_readerfirst phoas) 0
 
 type StateFirst = State Int Foas_Exp
 
@@ -204,7 +204,7 @@ type StateFirst = State Int Foas_Exp
 instance UntypedLambda StateFirst where
     --lam :: (First->First)->First
     lam f = do i <- get
-               let arg = [chr i]
+               let arg = "x" ++ show i
                put (i+1)
                body <- f (return (Var arg))
                return $ Lambda arg body
@@ -218,7 +218,7 @@ typeclass_phoas_to_statefirst :: Phoas-> StateFirst
 typeclass_phoas_to_statefirst phoas = phoas
 
 typeclass_phoas_to_statefoas :: Phoas -> Foas_Exp
-typeclass_phoas_to_statefoas phoas = fst $ runState (typeclass_phoas_to_statefirst phoas) 97
+typeclass_phoas_to_statefoas phoas = fst $ runState (typeclass_phoas_to_statefirst phoas) 0
 
 {- data Foas_Exp = Var String
     | Lambda String Foas_Exp
@@ -233,23 +233,26 @@ data Phoas_Exp a = PVar a
     | PApp (Phoas_Exp a) (Phoas_Exp a) -}
 
 
-
-
+--type FirstOrderReader = Reader (Int,String) Foas_Exp
+-- Int is the state of new variables. If the String is non-empty, it is the one that should be put in
 
     
 -- conversion from phoas to first order representation
 -- algebraic datatype version
-phoas_to_foas :: Phoas_Exp String -> Foas_Exp
-phoas_to_foas a = go (map (\i-> "x" ++ show i) [1..]) a
-    where 
-    go :: [String] -> Phoas_Exp String -> Foas_Exp
-    go l (PApp e1 e2) = App (go l e1) (go l e2)
-    go (x:xs) (PLambda f) = Lambda x (go xs (f x))
-    go l (PVar a) = Var a
+phoas_to_foas :: Phoas_Exp String  -> Foas_Exp
+phoas_to_foas a = runReader (go a) 0
+    
+go :: Phoas_Exp String -> ReaderFirst
+go (PApp left right) = do l <- go left
+                          r <- go right
+                          return $ App l r
+go (PLambda f)  = do i <- ask
+                     let arg = "x" ++ show i
+                     body <- local (+1) $ go $ (f arg)
+                     return $ Lambda arg body
+go (PVar a) = return $ Var a
 
 -- problem: i have to instantiate the polymorphic parameter to String
-
-
 
 
 

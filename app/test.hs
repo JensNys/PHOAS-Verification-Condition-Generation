@@ -1,4 +1,4 @@
-import Test.HUnit
+import Test.Quickcheck
 import ProgramAssertionSemantics
 
 
@@ -19,5 +19,7 @@ test3 :: Test
 test3 = TestCase (assertEqual "testScope2" (runStatement testingScope2) (Just (7, []))) 
 test4 :: Test
 test4 = TestCase (assertEqual "testScope3" (runStatement testingScope3) (Just (4, []))) 
+
+
 
 
