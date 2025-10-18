@@ -241,21 +241,28 @@ data Phoas_Exp a = PVar a
 -- algebraic datatype version
 phoas_to_foas :: Phoas_Exp String  -> Foas_Exp
 phoas_to_foas a = runReader (go a) 0
-    
-go :: Phoas_Exp String -> ReaderFirst
-go (PApp left right) = do l <- go left
-                          r <- go right
-                          return $ App l r
-go (PLambda f)  = do i <- ask
-                     let arg = "x" ++ show i
-                     body <- local (+1) $ go $ (f arg)
-                     return $ Lambda arg body
-go (PVar a) = return $ Var a
+    where 
+    go :: Phoas_Exp String -> ReaderFirst
+    go (PApp left right) = do l <- go left
+                              r <- go right
+                              return $ App l r
+    go (PLambda f)  = do i <- ask
+                         let arg = "x" ++ show i
+                         body <- local (+1) $ go $ (f arg)
+                         return $ Lambda arg body
+    go (PVar a) = return $ Var a
 
 -- problem: i have to instantiate the polymorphic parameter to String
 
-
-
-
-
-
+phoas_to_foas' :: Phoas_Exp ReaderFirst  -> Foas_Exp
+phoas_to_foas' a = runReader (go a) 0
+    where 
+    go :: Phoas_Exp ReaderFirst -> ReaderFirst
+    go (PApp left right) = do l <- go left
+                              r <- go right
+                              return $ App l r
+    go (PLambda f)  = do i <- ask
+                         let arg = "x" ++ show i
+                         body <- local (+1) $ go $ (f (return (Var arg)))
+                         return $ Lambda arg body
+    go (PVar a) = a

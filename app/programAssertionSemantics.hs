@@ -169,17 +169,17 @@ data Prop = T
     | Exist (Value->Prop) 
     | Forall (Value->Prop)
 
-class Proposition p where
-  true :: p
-  false :: p
-  cmp :: Relop->Value->Value->p
-  and :: Bool->Bool->p
-  or :: p->p->p
-  implies ::  p->p->p
+{- class Proposition a where
+  true :: Proposition a
+  false :: Proposition a
+  cmp :: Relop->Value->Value->Proposition a
+  and :: Bool->Bool->Prop
+  or :: Proposition a->Proposition a->Proposition a
+  implies ::  Proposition a->
   exist :: (Value->p)->p
   forAll :: (Value->p)->p
 
-type PhoasProp = forall a. Proposition a => a
+type PhoasProp = forall a. Proposition a => a -}
 
 
 type LVar = String -- logic variables
