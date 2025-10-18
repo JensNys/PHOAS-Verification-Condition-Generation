@@ -2,7 +2,7 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
 
-module LambdaCalculi where
+module Week1.LambdaCalculi where
 --{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 --{-# HLINT ignore "Use camelCase" #-}
 
