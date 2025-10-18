@@ -21,7 +21,7 @@ type F = String
 data Prog = Fun F [X] Stm
 
 data Relop = Equal | LessThan | GreaterThan | NotEqual | LessThanEqual | GreaterThanEqual
-
+  deriving (Eq,Show)
 data Bexp = Compare Relop Stm Stm
 
 data Stm = Lit Value
@@ -157,7 +157,8 @@ runStatement s = (runStateT (interp s) [])
 
 ------------------------------------------------------------------------------------------------
 -- we define the syntax for Assertions
-
+type LVar = String -- logic variables
+type Valuation = M.Map LVar Value
 
 data Prop = T 
     | F 
@@ -168,6 +169,42 @@ data Prop = T
     | Implies Prop Prop
     | Exist (Value->Prop) 
     | Forall (Value->Prop)
+
+
+
+data FoasValue =  FVal Value
+                | FVar LVar
+    deriving (Eq,Show)
+
+data FoasProp = FoasT 
+    | FoasF 
+    | FoasCmp Relop FoasValue FoasValue -- these can be both LVars as values 
+    | FoasNot FoasProp
+    | FoasAnd FoasProp FoasProp 
+    | FoasOr FoasProp FoasProp 
+    | FoasImplies FoasProp FoasProp
+    | FoasExist LVar FoasProp 
+    | FoasForall LVar FoasProp
+    deriving (Eq,Show)
+
+data PhoasValue a =  PVal Value
+                | PVar a
+
+data PhoasProp a = PhoasT 
+    | PhoasF 
+    | PhoasCmp Relop (PhoasValue a) (PhoasValue a) -- these can be both LVars as values 
+    | PhoasNot FoasProp
+    | PhoasAnd (PhoasProp a) (PhoasProp a) 
+    | PhoasOr (PhoasProp a) (PhoasProp a) 
+    | PhoasImplies (PhoasProp a) (PhoasProp a)
+    | PhoasExist (a->(PhoasProp a))
+    | PhoasForall (a->(PhoasProp a))
+
+
+-- the motivation between FoasValue is that in the Hoas prop, you can say Exists (\v-> Cmp Equal v 5) so in first order a comparison could be between variables and FoasValues (Exist "v" (Cmp Equal (Var "v") (Val 5)))
+
+
+
 
 {- class Proposition a where
   true :: Proposition a
@@ -182,8 +219,7 @@ data Prop = T
 type PhoasProp = forall a. Proposition a => a -}
 
 
-type LVar = String -- logic variables
-type Valuation = M.Map LVar Value
+
 
 
 
