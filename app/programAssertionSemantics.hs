@@ -162,7 +162,7 @@ runStatement s = (runStateT (interp s) [])
 data Prop = T 
     | F 
     | Cmp Relop Value Value 
-    | Eq Bool Bool -- should this be Prop Prop?
+    | Not Prop
     | And Prop Prop 
     | Or Prop Prop 
     | Implies Prop Prop
@@ -289,16 +289,16 @@ pushStore x v = Wstore $ (\post store->post () (pushL x v store))
 popStore :: Wstore ()
 popStore = Wstore $ (\post store -> post () (popL store))
 
+-- the cond parameter should be 
+matchBool_angelic :: Prop-> Wstore a-> Wstore a-> Wstore a
+matchBool_angelic cond m1 m2= (do assume cond;m1) 
+                              ⊗
+                              (do assume (Not cond);m2)
 
-matchBool_angelic :: Bool-> Wstore a-> Wstore a-> Wstore a
-matchBool_angelic v m1 m2= (do assume (Eq v True);m1) 
-                            ⊗
-                           (do assume (Eq v False);m2)
-
-matchBool_demonic :: Bool-> Wstore a-> Wstore a-> Wstore a
-matchBool_demonic v m1 m2= (do assert (Eq v True);m1) 
-                            ⊕
-                           (do assert (Eq v False);m2)
+matchBool_demonic :: Prop-> Wstore a-> Wstore a-> Wstore a
+matchBool_demonic cond m1 m2= (do assert cond;m1) 
+                              ⊕
+                              (do assert (Not cond);m2)
 
 
 assignWstore :: X->Value->Wstore ()
@@ -309,10 +309,11 @@ lookupWstore a = Wstore $ (\post store->case (Prelude.lookup a store) of
                                                 Nothing -> F
                                                 Just value -> post value store)
 
-execb :: Bexp->Wstore Bool
+-- turns a boolean expression into the proposition that is equivalent to the expression in the monadic Wstore environment
+execb :: Bexp->Wstore Prop
 execb (Compare op s1 s2) = do x <- exec s1
                               y <- exec s2
-                              return ((toFunc op) x y)
+                              return (Cmp op x y)
 
 exec :: Stm->Wstore Value
 exec (Lit c) = return c
@@ -356,5 +357,3 @@ observationPartial ::  StateT Store Maybe a->Wstore a
 observationPartial r = Wstore $ (\post s0-> case ((runStateT r) s0) of 
                                           Nothing -> T
                                           Just (a,store) -> post a store)
-
-  
