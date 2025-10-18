@@ -244,6 +244,17 @@ phoas_to_foas_reader (PhoasForall f)= do i <- ask
                                          return $ FoasForall arg body
 
 
+
+
+-- forall x, there exist y: x<y /\ 0<y
+phoas_example :: PhoasProp a
+phoas_example= PhoasForall (\x->PhoasExist (\y->PhoasAnd (PhoasCmp LessThanEqual (PVar x) (PVar y)) (PhoasCmp LessThanEqual (PVal 0) (PVar y))))
+
+foas_example :: FoasProp
+foas_example = FoasForall "x0" (FoasExist "x1" (FoasAnd (FoasCmp LessThanEqual (FVar "x0") (FVar "x1")) (FoasCmp LessThanEqual (FVal 0) (FVar "x1"))))
+
+
+
 {- class Proposition a where
   true :: Proposition a
   false :: Proposition a
@@ -431,3 +442,7 @@ observationPartial ::  StateT Store Maybe a->Wstore a
 observationPartial r = Wstore $ (\post s0-> case ((runStateT r) s0) of 
                                           Nothing -> T
                                           Just (a,store) -> post a store)
+
+
+
+
