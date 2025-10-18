@@ -1,7 +1,7 @@
 {-# LANGUAGE RankNTypes  #-}
 module ProgramAssertionSemantics where
 
-
+import Control.Monad.Reader
 import Control.Monad.State
 --import Control.Monad.Trans.Maybe
 --import Control.Monad.Cont
@@ -193,7 +193,7 @@ data PhoasValue a =  PVal Value
 data PhoasProp a = PhoasT 
     | PhoasF 
     | PhoasCmp Relop (PhoasValue a) (PhoasValue a) -- these can be both LVars as values 
-    | PhoasNot FoasProp
+    | PhoasNot (PhoasProp a)
     | PhoasAnd (PhoasProp a) (PhoasProp a) 
     | PhoasOr (PhoasProp a) (PhoasProp a) 
     | PhoasImplies (PhoasProp a) (PhoasProp a)
@@ -203,7 +203,45 @@ data PhoasProp a = PhoasT
 
 -- the motivation between FoasValue is that in the Hoas prop, you can say Exists (\v-> Cmp Equal v 5) so in first order a comparison could be between variables and FoasValues (Exist "v" (Cmp Equal (Var "v") (Val 5)))
 
+type ReaderFirst = Reader Int FoasProp
+type ReaderFirstValue = Reader Int FoasValue
 
+
+
+phoasValue_to_foasValueReader :: PhoasValue ReaderFirstValue -> ReaderFirstValue
+phoasValue_to_foasValueReader (PVal v) = return $ FVal v
+phoasValue_to_foasValueReader (PVar rfv) = rfv
+
+
+phoas_to_foas :: PhoasProp ReaderFirstValue -> FoasProp
+phoas_to_foas phoasProp = runReader (phoas_to_foas_reader phoasProp) 0
+
+phoas_to_foas_reader :: PhoasProp ReaderFirstValue -> ReaderFirst
+phoas_to_foas_reader PhoasT = return FoasT
+phoas_to_foas_reader PhoasF = return FoasF
+phoas_to_foas_reader (PhoasCmp op v1 v2) = do r1 <- phoasValue_to_foasValueReader v1
+                                              r2 <- phoasValue_to_foasValueReader v2
+                                              return $ FoasCmp op r1 r2
+phoas_to_foas_reader (PhoasNot p) = do r <- phoas_to_foas_reader p
+                                       return $ FoasNot r
+phoas_to_foas_reader (PhoasAnd p1 p2) = do r1 <- phoas_to_foas_reader p1
+                                           r2 <- phoas_to_foas_reader p2
+                                           return $ FoasAnd r1 r2
+phoas_to_foas_reader (PhoasOr p1 p2) =  do r1 <- phoas_to_foas_reader p1
+                                           r2 <- phoas_to_foas_reader p2
+                                           return $ FoasOr r1 r2
+phoas_to_foas_reader (PhoasImplies p1 p2) = 
+                                        do r1 <- phoas_to_foas_reader p1
+                                           r2 <- phoas_to_foas_reader p2
+                                           return $ FoasImplies r1 r2
+phoas_to_foas_reader (PhoasExist f) = do i <- ask
+                                         let arg = "x" ++ show i
+                                         body <- local (+1) $ phoas_to_foas_reader $ (f (return (FVar arg)))
+                                         return $ FoasExist arg body
+phoas_to_foas_reader (PhoasForall f)= do i <- ask
+                                         let arg = "x" ++ show i
+                                         body <- local (+1) $ phoas_to_foas_reader $ (f (return (FVar arg)))
+                                         return $ FoasForall arg body
 
 
 {- class Proposition a where
