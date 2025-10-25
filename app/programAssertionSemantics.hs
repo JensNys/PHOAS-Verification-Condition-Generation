@@ -265,26 +265,21 @@ phoas_to_foas_reader (PhoasCmp op l r) = do v1 <- l
                                             return $ FoasCmp op v1 v2
 phoas_to_foas_reader (PhoasNot p) = do r <- phoas_to_foas_reader p
                                        return $ FoasNot r
-phoas_to_foas_reader (PhoasAnd p1 p2) = do r1 <- phoas_to_foas_reader p1
-                                           r2 <- phoas_to_foas_reader p2
-                                           return $ FoasAnd r1 r2
-phoas_to_foas_reader (PhoasOr p1 p2) =  do r1 <- phoas_to_foas_reader p1
-                                           r2 <- phoas_to_foas_reader p2
-                                           return $ FoasOr r1 r2
-phoas_to_foas_reader (PhoasImplies p1 p2)= do r1 <- phoas_to_foas_reader p1
-                                              r2 <- phoas_to_foas_reader p2
-                                              return $ FoasImplies r1 r2
-phoas_to_foas_reader (PhoasExist _ f) = do i <- ask
-                                           let arg = "x" ++ show i
-                                           body <- local (+1) $ phoas_to_foas_reader $ (f (return (Var arg)))
-                                           return $ FoasExist arg body
-phoas_to_foas_reader (PhoasForall _ f) = do i <- ask
-                                            let arg = "x" ++ show i
-                                            body <- local (+1) $ phoas_to_foas_reader $ (f (return (Var arg)))
-                                            return $ FoasForall arg body
+phoas_to_foas_reader (PhoasAnd p1 p2) = binary_prop_to_foas_reader p1 p2 FoasAnd
+phoas_to_foas_reader (PhoasOr p1 p2) =  binary_prop_to_foas_reader p1 p2 FoasOr
+phoas_to_foas_reader (PhoasImplies p1 p2)= binary_prop_to_foas_reader p1 p2 FoasImplies 
+phoas_to_foas_reader (PhoasExist m f) = quantifiers_to_foas_reader m f FoasExist
+phoas_to_foas_reader (PhoasForall m f) = quantifiers_to_foas_reader m f FoasForall
 
-
-
+quantifiers_to_foas_reader :: Maybe String -> ((ReaderInt Stm)->PhoasProp (ReaderInt Stm))->(LVar->FoasProp->FoasProp)->ReaderInt FoasProp
+quantifiers_to_foas_reader  _ f quantifier=do i <- ask
+                                              let arg = "x" ++ show i
+                                              body <- local (+1) $ phoas_to_foas_reader $ (f (return (Var arg)))
+                                              return $ quantifier arg body
+binary_prop_to_foas_reader :: (PhoasProp (ReaderInt Stm))->(PhoasProp (ReaderInt Stm))->(FoasProp->FoasProp->FoasProp)->ReaderInt FoasProp
+binary_prop_to_foas_reader p1 p2 bin = do r1 <- phoas_to_foas_reader p1
+                                          r2 <- phoas_to_foas_reader p2
+                                          return $ bin r1 r2
 
 -- forall x, there exist y: x<y /\ 0<y
 phoas_example ::Ring a => PhoasProp a
