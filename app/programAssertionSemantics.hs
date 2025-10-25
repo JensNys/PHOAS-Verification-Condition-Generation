@@ -39,6 +39,9 @@ data Stm = Lit Value
     | If Bexp Stm Stm -- if bexp then stm else stm
   deriving (Eq,Show)
 
+
+
+
 -- this is the same type as Stm-> Valuation ->Maybe Value
 -- interp ::Stm -> ReaderT Valuation Maybe Integer
 
@@ -210,6 +213,9 @@ data Ring a => PhoasProp a = PhoasT
     | PhoasImplies (PhoasProp a) (PhoasProp a)
     | PhoasExist (Maybe String) (a->(PhoasProp a))
     | PhoasForall (Maybe String) (a->(PhoasProp a))
+-- assumes the maybe string isn't of the form "x" ++ show i for an integer i.
+
+
 
 -- typeclass for the operations on Values.
 instance Ring Stm where
@@ -265,17 +271,28 @@ phoas_to_foas_reader (PhoasCmp op l r) = do v1 <- l
                                             return $ FoasCmp op v1 v2
 phoas_to_foas_reader (PhoasNot p) = do r <- phoas_to_foas_reader p
                                        return $ FoasNot r
-phoas_to_foas_reader (PhoasAnd p1 p2) = binary_prop_to_foas_reader p1 p2 FoasAnd
-phoas_to_foas_reader (PhoasOr p1 p2) =  binary_prop_to_foas_reader p1 p2 FoasOr
+phoas_to_foas_reader (PhoasAnd p1 p2)    = binary_prop_to_foas_reader p1 p2 FoasAnd
+phoas_to_foas_reader (PhoasOr p1 p2)     = binary_prop_to_foas_reader p1 p2 FoasOr
 phoas_to_foas_reader (PhoasImplies p1 p2)= binary_prop_to_foas_reader p1 p2 FoasImplies 
-phoas_to_foas_reader (PhoasExist m f) = quantifiers_to_foas_reader m f FoasExist
-phoas_to_foas_reader (PhoasForall m f) = quantifiers_to_foas_reader m f FoasForall
+phoas_to_foas_reader (PhoasExist m f)    = quantifiers_to_foas_reader m f FoasExist
+phoas_to_foas_reader (PhoasForall m f)   = quantifiers_to_foas_reader m f FoasForall
 
+
+
+-- interprets a quantifier
 quantifiers_to_foas_reader :: Maybe String -> ((ReaderInt Stm)->PhoasProp (ReaderInt Stm))->(LVar->FoasProp->FoasProp)->ReaderInt FoasProp
-quantifiers_to_foas_reader  _ f quantifier=do i <- ask
+quantifiers_to_foas_reader  m f quantifier=do i <- ask
                                               let arg = "x" ++ show i
-                                              body <- local (+1) $ phoas_to_foas_reader $ (f (return (Var arg)))
+
+                                              body <- case m of 
+                                                Nothing -> (local (+1) $ phoas_to_foas_reader $ (f (return (Var arg))))
+                                                Just s ->  (phoas_to_foas_reader $ (f (return (Var s))))
+
                                               return $ quantifier arg body
+                                              
+
+
+--interprets a binary propositional operator.
 binary_prop_to_foas_reader :: (PhoasProp (ReaderInt Stm))->(PhoasProp (ReaderInt Stm))->(FoasProp->FoasProp->FoasProp)->ReaderInt FoasProp
 binary_prop_to_foas_reader p1 p2 bin = do r1 <- phoas_to_foas_reader p1
                                           r2 <- phoas_to_foas_reader p2
