@@ -266,3 +266,6 @@ phoas_to_foas' a = runReader (go a) 0
                          body <- local (+1) $ go $ (f (return (Var arg)))
                          return $ Lambda arg body
     go (PVar a) = a
+
+
+

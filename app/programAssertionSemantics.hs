@@ -1,4 +1,8 @@
 {-# LANGUAGE RankNTypes  #-}
+{-# LANGUAGE MultiParamTypeClasses  #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances #-}
+
 module ProgramAssertionSemantics where
 
 import Control.Monad.Reader
@@ -23,7 +27,7 @@ data Prog = Fun F [X] Stm
 data Relop = Equal | LessThan | GreaterThan | NotEqual | LessThanEqual | GreaterThanEqual
   deriving (Eq,Show)
 data Bexp = Compare Relop Stm Stm
-
+    deriving (Eq,Show)
 data Stm = Lit Value
     | Var X
     | Add Stm Stm
@@ -33,7 +37,7 @@ data Stm = Lit Value
     | Let X Stm Stm -- let X = Stm where Stm (make a new variable)
     | Seq Stm Stm --e1;e2
     | If Bexp Stm Stm -- if bexp then stm else stm
-
+  deriving (Eq,Show)
 
 -- this is the same type as Stm-> Valuation ->Maybe Value
 -- interp ::Stm -> ReaderT Valuation Maybe Integer
@@ -172,13 +176,13 @@ data Prop = T
 
 
 
-data FoasValue =  FVal Value
+{- data FoasValue =  FVal Value
                 | FVar LVar
-    deriving (Eq,Show)
+    deriving (Eq,Show) -}
 
 data FoasProp = FoasT 
     | FoasF 
-    | FoasCmp Relop FoasValue FoasValue -- these can be both LVars as values 
+    | FoasCmp Relop Stm Stm -- these can be both LVars as values 
     | FoasNot FoasProp
     | FoasAnd FoasProp FoasProp 
     | FoasOr FoasProp FoasProp 
@@ -186,42 +190,79 @@ data FoasProp = FoasT
     | FoasExist LVar FoasProp 
     | FoasForall LVar FoasProp
     deriving (Eq,Show)
-
+{- 
 data PhoasValue a =  PVal Value
-                | PVar a
+                | PVar a -}
 
-data PhoasProp a = PhoasT 
+
+class Ring a where
+    lit :: Value->a
+    add :: a -> a -> a
+    minus :: a -> a -> a
+    mul :: a -> a -> a
+
+data Ring a => PhoasProp a = PhoasT 
     | PhoasF 
-    | PhoasCmp Relop (PhoasValue a) (PhoasValue a) -- these can be both LVars as values 
+    | PhoasCmp Relop a a  -- these can be both LVars as values 
     | PhoasNot (PhoasProp a)
     | PhoasAnd (PhoasProp a) (PhoasProp a) 
     | PhoasOr (PhoasProp a) (PhoasProp a) 
     | PhoasImplies (PhoasProp a) (PhoasProp a)
-    | PhoasExist (a->(PhoasProp a))
-    | PhoasForall (a->(PhoasProp a))
+    | PhoasExist (Maybe String) (a->(PhoasProp a))
+    | PhoasForall (Maybe String) (a->(PhoasProp a))
 
+-- typeclass for the operations on Values.
+instance Ring Stm where
+  lit = Lit
+  add = Add
+  mul = Mul
+  minus = Minus
+
+
+instance Ring Int where
+  lit = id
+  add = (+)
+  mul = (*)
+  minus = (-)
+
+
+
+instance Ring (Reader Int Stm) where
+  lit i = return $ Lit i
+  add x y = do v1 <- x
+               v2 <- y
+               return (Add v1 v2)
+  mul x y=  do v1 <- x
+               v2 <- y
+               return (Mul v1 v2)
+  minus x y=do v1 <- x
+               v2 <- y
+               return (Minus v1 v2)
 
 -- the motivation between FoasValue is that in the Hoas prop, you can say Exists (\v-> Cmp Equal v 5) so in first order a comparison could be between variables and FoasValues (Exist "v" (Cmp Equal (Var "v") (Val 5)))
 
-type ReaderFirst = Reader Int FoasProp
-type ReaderFirstValue = Reader Int FoasValue
+
+type ReaderInt a = Reader Int a
 
 
 
-phoasValue_to_foasValueReader :: PhoasValue ReaderFirstValue -> ReaderFirstValue
+{- phoasValue_to_foasValueReader :: PhoasValue (ReaderInt Stm) -> ReaderInt FoasValue
 phoasValue_to_foasValueReader (PVal v) = return $ FVal v
-phoasValue_to_foasValueReader (PVar rfv) = rfv
+phoasValue_to_foasValueReader (PVar rfv) = rfv -}
 
 
-phoas_to_foas :: PhoasProp ReaderFirstValue -> FoasProp
+phoas_to_foas :: PhoasProp (ReaderInt Stm) -> FoasProp
 phoas_to_foas phoasProp = runReader (phoas_to_foas_reader phoasProp) 0
 
-phoas_to_foas_reader :: PhoasProp ReaderFirstValue -> ReaderFirst
+
+
+
+phoas_to_foas_reader :: PhoasProp (ReaderInt Stm) -> ReaderInt FoasProp
 phoas_to_foas_reader PhoasT = return FoasT
 phoas_to_foas_reader PhoasF = return FoasF
-phoas_to_foas_reader (PhoasCmp op v1 v2) = do r1 <- phoasValue_to_foasValueReader v1
-                                              r2 <- phoasValue_to_foasValueReader v2
-                                              return $ FoasCmp op r1 r2
+phoas_to_foas_reader (PhoasCmp op l r) = do v1 <- l
+                                            v2 <- r
+                                            return $ FoasCmp op v1 v2
 phoas_to_foas_reader (PhoasNot p) = do r <- phoas_to_foas_reader p
                                        return $ FoasNot r
 phoas_to_foas_reader (PhoasAnd p1 p2) = do r1 <- phoas_to_foas_reader p1
@@ -230,42 +271,41 @@ phoas_to_foas_reader (PhoasAnd p1 p2) = do r1 <- phoas_to_foas_reader p1
 phoas_to_foas_reader (PhoasOr p1 p2) =  do r1 <- phoas_to_foas_reader p1
                                            r2 <- phoas_to_foas_reader p2
                                            return $ FoasOr r1 r2
-phoas_to_foas_reader (PhoasImplies p1 p2) = 
-                                        do r1 <- phoas_to_foas_reader p1
-                                           r2 <- phoas_to_foas_reader p2
-                                           return $ FoasImplies r1 r2
-phoas_to_foas_reader (PhoasExist f) = do i <- ask
-                                         let arg = "x" ++ show i
-                                         body <- local (+1) $ phoas_to_foas_reader $ (f (return (FVar arg)))
-                                         return $ FoasExist arg body
-phoas_to_foas_reader (PhoasForall f)= do i <- ask
-                                         let arg = "x" ++ show i
-                                         body <- local (+1) $ phoas_to_foas_reader $ (f (return (FVar arg)))
-                                         return $ FoasForall arg body
+phoas_to_foas_reader (PhoasImplies p1 p2)= do r1 <- phoas_to_foas_reader p1
+                                              r2 <- phoas_to_foas_reader p2
+                                              return $ FoasImplies r1 r2
+phoas_to_foas_reader (PhoasExist _ f) = do i <- ask
+                                           let arg = "x" ++ show i
+                                           body <- local (+1) $ phoas_to_foas_reader $ (f (return (Var arg)))
+                                           return $ FoasExist arg body
+phoas_to_foas_reader (PhoasForall _ f) = do i <- ask
+                                            let arg = "x" ++ show i
+                                            body <- local (+1) $ phoas_to_foas_reader $ (f (return (Var arg)))
+                                            return $ FoasForall arg body
 
 
 
 
 -- forall x, there exist y: x<y /\ 0<y
-phoas_example :: PhoasProp a
-phoas_example= PhoasForall (\x->PhoasExist (\y->PhoasAnd (PhoasCmp LessThanEqual (PVar x) (PVar y)) (PhoasCmp LessThanEqual (PVal 0) (PVar y))))
+phoas_example ::Ring a => PhoasProp a
+phoas_example= PhoasForall Nothing (\x->PhoasExist Nothing (\y->(PhoasAnd (PhoasCmp LessThanEqual x y) (PhoasCmp LessThanEqual (lit 0) y))))
 
 foas_example :: FoasProp
-foas_example = FoasForall "x0" (FoasExist "x1" (FoasAnd (FoasCmp LessThanEqual (FVar "x0") (FVar "x1")) (FoasCmp LessThanEqual (FVal 0) (FVar "x1"))))
+foas_example = FoasForall "x0" (FoasExist "x1" (FoasAnd (FoasCmp LessThanEqual (Var "x0") (Var "x1")) (FoasCmp LessThanEqual (Lit 0) (Var "x1"))))
 
 
 
-{- class Proposition a where
-  true :: Proposition a
-  false :: Proposition a
-  cmp :: Relop->Value->Value->Proposition a
-  and :: Bool->Bool->Prop
-  or :: Proposition a->Proposition a->Proposition a
-  implies ::  Proposition a->
-  exist :: (Value->p)->p
-  forAll :: (Value->p)->p
+{- class Proposition p a where
+  true :: p
+  false :: p
+  cmp :: Relop->a->a->p
+  and :: p->p->p
+  or :: p->p->p
+  implies ::  p->p->p
+  exist :: (a->p)->p
+  forAll :: (a->p)->p
 
-type PhoasProp = forall a. Proposition a => a -}
+type PhoasProposition = forall a. forall p. Proposition p a => p -}
 
 
 
@@ -375,13 +415,13 @@ popStore :: Wstore ()
 popStore = Wstore $ (\post store -> post () (popL store))
 
 -- the cond parameter should be 
-matchBool_angelic :: Prop-> Wstore a-> Wstore a-> Wstore a
-matchBool_angelic cond m1 m2= (do assume cond;m1) 
+matchBool_demonic :: Prop-> Wstore a-> Wstore a-> Wstore a
+matchBool_demonic cond m1 m2= (do assume cond;m1) 
                               ⊗
                               (do assume (Not cond);m2)
 
-matchBool_demonic :: Prop-> Wstore a-> Wstore a-> Wstore a
-matchBool_demonic cond m1 m2= (do assert cond;m1) 
+matchBool_angelic :: Prop-> Wstore a-> Wstore a-> Wstore a
+matchBool_angelic cond m1 m2= (do assert cond;m1) 
                               ⊕
                               (do assert (Not cond);m2)
 
@@ -442,6 +482,11 @@ observationPartial ::  StateT Store Maybe a->Wstore a
 observationPartial r = Wstore $ (\post s0-> case ((runStateT r) s0) of 
                                           Nothing -> T
                                           Just (a,store) -> post a store)
+
+
+
+{- wp :: Stm -> (a->Store->Prop)->Store->Prop
+wp = runWstore . exec  -}
 
 
 
