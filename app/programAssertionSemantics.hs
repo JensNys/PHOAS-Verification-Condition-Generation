@@ -16,6 +16,7 @@ import Data.Map as M
 --type Var = String
 type Value = Int
 type Store = [(X,Value)]
+type GStore v = [(X,v)]
 --program variables. They are immutable location
 type X = String
 --function names
@@ -198,21 +199,21 @@ data PhoasValue a =  PVal Value
                 | PVar a -}
 
 
-class Ring a where
-    lit :: Value->a
-    add :: a -> a -> a
-    minus :: a -> a -> a
-    mul :: a -> a -> a
+class Ring v where
+    lit :: Value->v
+    add :: v -> v -> v
+    minus :: v -> v -> v
+    mul :: v -> v -> v
 
-data Ring a => PhoasProp a = PhoasT 
+data Ring v => PhoasProp v = PhoasT 
     | PhoasF 
-    | PhoasCmp Relop a a  -- these can be both LVars as values 
-    | PhoasNot (PhoasProp a)
-    | PhoasAnd (PhoasProp a) (PhoasProp a) 
-    | PhoasOr (PhoasProp a) (PhoasProp a) 
-    | PhoasImplies (PhoasProp a) (PhoasProp a)
-    | PhoasExist (Maybe String) (a->(PhoasProp a))
-    | PhoasForall (Maybe String) (a->(PhoasProp a))
+    | PhoasCmp Relop v v  -- these can be both LVars as values 
+    | PhoasNot (PhoasProp v)
+    | PhoasAnd (PhoasProp v) (PhoasProp v) 
+    | PhoasOr (PhoasProp v) (PhoasProp v) 
+    | PhoasImplies (PhoasProp v) (PhoasProp v)
+    | PhoasExist (Maybe String) (v->(PhoasProp v))
+    | PhoasForall (Maybe String) (v->(PhoasProp v))
 -- assumes the maybe string isn't of the form "x" ++ show i for an integer i.
 
 
@@ -248,7 +249,7 @@ instance Ring (Reader Int Stm) where
 -- the motivation between FoasValue is that in the Hoas prop, you can say Exists (\v-> Cmp Equal v 5) so in first order a comparison could be between variables and FoasValues (Exist "v" (Cmp Equal (Var "v") (Val 5)))
 
 
-type ReaderInt a = Reader Int a
+type ReaderInt v = Reader Int v
 
 
 
@@ -286,7 +287,7 @@ quantifiers_to_foas_reader  m f quantifier=do i <- ask
 
                                               body <- case m of 
                                                 Nothing -> (local (+1) $ phoas_to_foas_reader $ (f (return (Var arg))))
-                                                Just s ->  (phoas_to_foas_reader $ (f (return (Var s))))
+                                                Just s ->               (phoas_to_foas_reader $ (f (return (Var s))))
 
                                               return $ quantifier arg body
                                               
@@ -299,7 +300,7 @@ binary_prop_to_foas_reader p1 p2 bin = do r1 <- phoas_to_foas_reader p1
                                           return $ bin r1 r2
 
 -- forall x, there exist y: x<y /\ 0<y
-phoas_example ::Ring a => PhoasProp a
+phoas_example ::Ring v => PhoasProp v
 phoas_example= PhoasForall Nothing (\x->PhoasExist Nothing (\y->(PhoasAnd (PhoasCmp LessThanEqual x y) (PhoasCmp LessThanEqual (lit 0) y))))
 
 foas_example :: FoasProp
@@ -324,135 +325,118 @@ type PhoasProposition = forall a. forall p. Proposition p a => p -}
 
 
 
-data Contract = ForallC (Value -> Contract) -- forAll logicVariables {Precondition} Program {Int->Postcondition}
-    | HoareTriple Prop Prog [Value] (Value->Prop)
+data Contract v =  ForallC (Maybe String) (v -> Contract v) -- forAll logicVariables {Precondition} Program {Int->Postcondition}
+    | HoareTriple (PhoasProp v) Prog [v] (v->Store->PhoasProp v)
 
 
 
-absoluteValueContract :: Contract
+absoluteValueContract :: Ring v => Contract v
 --absoluteValueContract = MkContract ["x"] T absoluteValue (\x -> )
 --absoluteValueContract = MkContract ["x"] T absoluteValue (\x -> And (Cmp GreaterThan x 0) (T))
-absoluteValueContract = ForallC (\x->HoareTriple T absoluteValue [x] (\result->And (Cmp GreaterThan result 0) (Cmp GreaterThanEqual result x)))
+absoluteValueContract = ForallC Nothing (\x->HoareTriple PhoasT absoluteValue [x] (\result _->PhoasAnd (PhoasCmp GreaterThan result (lit 0)) (PhoasCmp GreaterThanEqual result x)))
 
-newtype Wpure a = Wpure {runWpure :: (a->Prop)->Prop} 
-instance Functor Wpure where
+
+
+
+
+newtype Wpure v a = Wpure {runWpure :: (a->PhoasProp v)->PhoasProp v}
+instance Functor (Wpure v) where
   fmap = liftM
 
-instance Applicative Wpure where
+instance Applicative (Wpure v) where
   pure a = Wpure $ (\post->post a)
   (<*>) = ap
 
-instance Monad Wpure where
+instance Monad (Wpure v) where
     return = pure
     c >>= k = Wpure $ (\post-> (runWpure c) (\a->runWpure (k a) post))
 
 
 
 
-angelic :: Maybe String -> Wpure Value
-angelic _ = Wpure $ (\post-> Exist (\v->post v))
+angelic :: Ring v =>Maybe String -> Wpure v v
+angelic m = Wpure $ (\post-> PhoasExist m (\v->post v))
 
-demonic :: Maybe String -> Wpure Value
-demonic _ = Wpure $ (\post-> Forall (\v->post v))
-
--- unicode 2295
-{- 
-block :: Wpure a
-block = Wpure $ (\_->T)
-
-fail :: Wpure a
-fail = Wpure $ (\_->F)
-
-
-(⊕) :: Wpure a->Wpure a -> Wpure a
-m1 ⊕ m2 = Wpure $ (\post -> Or ((runWpure m1) post) ((runWpure m2) post))
-
-(⊗) :: Wpure a->Wpure a -> Wpure a
-m1 ⊗ m2 = Wpure $ (\post -> And ((runWpure m1) post) ((runWpure m2) post))
-
-
-assert :: Prop -> Wpure ()
-assert p = Wpure $ (\post store-> And p (post ()))
-
-assume :: Prop -> Wpure ()
-assume p = Wpure $ (\post -> Implies p (post ())) -}
+demonic :: Ring v => Maybe String -> Wpure v v
+demonic m = Wpure $ (\post-> PhoasForall m (\v->post v))
 
 
 
 
 
-newtype Wstore a = Wstore {runWstore :: (a->Store->Prop)->Store->Prop}
-instance Functor Wstore where
+
+newtype Wstore v a = Wstore {runWstore :: (a->Store->PhoasProp v)->Store->PhoasProp v}
+instance Functor (Wstore v) where
   fmap = liftM
-instance Applicative Wstore where
+instance Applicative (Wstore v) where
   pure a = Wstore $ (\post store->post a store)
   (<*>) = ap
 
-instance Monad Wstore where
+instance Monad (Wstore v) where
     return = pure
     c >>= k = Wstore $ (\post store1-> (runWstore c) (\a store2->runWstore (k a) post store2) store1)
 
 
-block :: Wstore a
-block = Wstore $ (\_ _->T)
+block :: Ring v =>Wstore v a
+block = Wstore $ (\_ _->PhoasT)
 
-fail :: Wstore a
-fail = Wstore $ (\_ _->F)
+fail :: Ring v =>Wstore v a
+fail = Wstore $ (\_ _->PhoasF)
 
 -- unicode 2295
-(⊕) :: Wstore a->Wstore a -> Wstore a
-m1 ⊕ m2 = Wstore $ (\post store-> Or ((runWstore m1) post store) ((runWstore m2) post store))
+(⊕) ::Ring v => Wstore v a->Wstore v a -> Wstore v a
+m1 ⊕ m2 = Wstore $ (\post store-> PhoasOr ((runWstore m1) post store) ((runWstore m2) post store))
 
-(⊗) :: Wstore a->Wstore a -> Wstore a
-m1 ⊗ m2 = Wstore $ (\post store -> And ((runWstore m1) post store) ((runWstore m2) post store))
-
-
-assert :: Prop -> Wstore ()
-assert p = Wstore $ (\post store-> And p (post () store))
-
-assume :: Prop -> Wstore ()
-assume p = Wstore $ (\post store-> Implies p (post () store))
+(⊗) :: Ring v =>Wstore v a->Wstore v a -> Wstore v a
+m1 ⊗ m2 = Wstore $ (\post store -> PhoasAnd ((runWstore m1) post store) ((runWstore m2) post store))
 
 
+assert :: Ring v =>PhoasProp v -> Wstore v ()
+assert p = Wstore $ (\post store-> PhoasAnd p (post () store))
+
+assume :: Ring v =>PhoasProp v -> Wstore v ()
+assume p = Wstore $ (\post store-> PhoasImplies p (post () store))
 
 
 
-evalStore :: Wstore a ->Store-> Wpure a 
+
+
+evalStore ::Ring v => Wstore v a ->Store-> Wpure v a 
 evalStore m store = Wpure $ (\post-> (runWstore m) (\a _->post a) store)
 
-pushStore :: X->Value -> Wstore ()
+pushStore ::Ring v => X->Value -> Wstore v ()
 pushStore x v = Wstore $ (\post store->post () (pushL x v store))
 
-popStore :: Wstore ()
+popStore :: Ring v =>Wstore v ()
 popStore = Wstore $ (\post store -> post () (popL store))
 
 -- the cond parameter should be 
-matchBool_demonic :: Prop-> Wstore a-> Wstore a-> Wstore a
+matchBool_demonic :: Ring v =>PhoasProp v-> Wstore v a-> Wstore v a-> Wstore v a
 matchBool_demonic cond m1 m2= (do assume cond;m1) 
                               ⊗
-                              (do assume (Not cond);m2)
+                              (do assume (PhoasNot cond);m2)
 
-matchBool_angelic :: Prop-> Wstore a-> Wstore a-> Wstore a
+matchBool_angelic :: Ring v =>PhoasProp v-> Wstore v a-> Wstore v a-> Wstore v a
 matchBool_angelic cond m1 m2= (do assert cond;m1) 
                               ⊕
-                              (do assert (Not cond);m2)
+                              (do assert (PhoasNot cond);m2)
 
 
-assignWstore :: X->Value->Wstore ()
+assignWstore ::Ring v => X->Value->Wstore v ()
 assignWstore x v = Wstore $ (\post store->post () (change x v store))
 
-lookupWstore :: X->Wstore Value
+lookupWstore ::Ring v => X->Wstore v Value
 lookupWstore a = Wstore $ (\post store->case (Prelude.lookup a store) of
-                                                Nothing -> F
+                                                Nothing -> PhoasF
                                                 Just value -> post value store)
 
 -- turns a boolean expression into the proposition that is equivalent to the expression in the monadic Wstore environment
-execb :: Bexp->Wstore Prop
+execb ::Ring v => Bexp->Wstore v (PhoasProp v)
 execb (Compare op s1 s2) = do x <- exec s1
                               y <- exec s2
-                              return (Cmp op x y)
+                              return (PhoasCmp op (lit x) (lit y))
 
-exec :: Stm->Wstore Value
+exec :: Ring v =>Stm->Wstore v Value
 exec (Lit c) = return c
 exec (Var a) = lookupWstore a
 exec (Add s1 s2) = do x <- exec s1
@@ -483,23 +467,33 @@ exec (If bexp s1 s2) = do b <- execb bexp
 
 -- with normal state: θ St(m) = λpost s0. post (m s0)
 -- total correctness interpretation by doing F
-observationTotal ::  StateT Store Maybe a->Wstore a 
+observationTotal :: Ring v => StateT Store Maybe a->Wstore v a 
 observationTotal r = Wstore $ (\post s0-> case ((runStateT r) s0) of 
-                                          Nothing -> F
+                                          Nothing -> PhoasF
                                           Just (a,store) -> post a store)
 
 -- with normal state: θ St(m) = λpost s0. post (m s0)
 -- partial correctness interpretation by doing T
-observationPartial ::  StateT Store Maybe a->Wstore a 
+observationPartial :: Ring v => StateT Store Maybe a->Wstore v a 
 observationPartial r = Wstore $ (\post s0-> case ((runStateT r) s0) of 
-                                          Nothing -> T
+                                          Nothing -> PhoasT
                                           Just (a,store) -> post a store)
 
 
 
-{- wp :: Stm -> (a->Store->Prop)->Store->Prop
-wp = runWstore . exec  -}
+
+
+wp ::Ring v=> Stm -> (v->Store->PhoasProp v)->Store->PhoasProp v
+wp stm post initStore = (runWstore (exec stm)) post initStore
 
 
 
+
+vc :: Contract v -> PhoasProp v
+vc (ForallC mstring f) = PhoasForall mstring (\v -> vc (f v))
+vc (HoareTriple pre prog args post) = case prog of 
+  Fun functionName params body -> PhoasImplies pre (wp body post (zip params args))
+
+--zip params args should be a Store.
+--it is only a Store if args is a list of Values
 
