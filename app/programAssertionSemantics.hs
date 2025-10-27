@@ -508,9 +508,10 @@ wp stm post initStore = (runWstore (exec stm)) post initStore
 vc :: Ring v=>Contract v -> PhoasProp v
 vc (ForallC mstring f) = PhoasForall mstring (\v -> vc (f v))
 vc (HoareTriple pre prog args post) = case prog of 
-  Fun functionName params body -> PhoasImplies pre (wp body post (zip params args))
+  Fun _ params body -> PhoasImplies pre (wp body post (zip params args))
 
 --zip params args should be a Store.
 --it is only a Store if args is a list of Values
 
+main ::IO ()
 main =  putStrLn $ prettyPrint $ phoas_to_foas $ vc absoluteValueContract
