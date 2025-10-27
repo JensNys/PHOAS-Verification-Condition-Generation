@@ -15,7 +15,7 @@ import Data.Map as M
 
 --type Var = String
 type Value = Int
-type Store = [(X,Value)]
+type (Store v) = [(X,v)]
 --program variables. They are immutable location
 type X = String
 --function names
@@ -25,7 +25,15 @@ type F = String
 data Prog = Fun F [X] Stm
 
 data Relop = Equal | LessThan | GreaterThan | NotEqual | LessThanEqual | GreaterThanEqual
-  deriving (Eq,Show)
+  deriving (Eq)
+instance Show Relop where
+  show Equal = "=="
+  show LessThan ="<"
+  show GreaterThan=">"
+  show NotEqual = "!="
+  show LessThanEqual = "<="
+  show GreaterThanEqual = ">="
+
 data Bexp = Compare Relop Stm Stm
     deriving (Eq,Show)
 data Stm = Lit Value
@@ -64,24 +72,24 @@ popL ((_,_):l) = l
 
 
 
-lookupVarS:: X->StateT Store Maybe Value
+lookupVarS:: X->StateT (Store Value) Maybe Value
 lookupVarS var = do env <- get
                     case (Prelude.lookup var env) of
                          Just a -> return a
                          Nothing -> lift Nothing
-putS :: X->Value -> StateT Store Maybe Value
+putS :: X->Value -> StateT (Store Value) Maybe Value
 putS var c = state (\m -> (c,(var,c):m))
 
 
 
-assign :: X->Value -> StateT Store Maybe Value
+assign :: X->Value -> StateT (Store Value) Maybe Value
 assign var c = state (\m -> (c,change var c m))
 
 
-pop :: StateT Store Maybe Value
+pop :: StateT (Store Value) Maybe Value
 pop = state (\m -> (snd (head m),tail m))
 
-remove :: X-> StateT Store Maybe ()
+remove :: X-> StateT (Store Value) Maybe ()
 remove x = state (\m -> ((),deleteL x m))
 
                 
@@ -93,7 +101,7 @@ toFunc NotEqual = (/=)
 toFunc LessThanEqual = (<=)
 toFunc GreaterThanEqual = (>=)
 
-interpb :: Bexp -> StateT Store Maybe Bool
+interpb :: Bexp -> StateT (Store Value) Maybe Bool
 interpb (Compare op s1 s2) = do x <- interp s1
                                 y <- interp s2
                                 return ((toFunc op) x y)
@@ -101,7 +109,7 @@ interpb (Compare op s1 s2) = do x <- interp s1
 -- Stm -> Valuation -> Maybe (Value, Valuation)
 
     
-interp :: Stm -> StateT Store Maybe Value
+interp :: Stm -> StateT (Store Value) Maybe Value
 interp (Lit c) = return c
 interp (Var a) = lookupVarS a
 interp (Add s1 s2) = do x <- interp s1
@@ -158,7 +166,7 @@ execute :: Prog -> [Value]-> Maybe Value
 execute (Fun _ l s) pars = fmap fst (runStateT (interp s) ((zip l pars)))
 
 
-runStatement :: Stm -> Maybe (Value,Store)
+runStatement :: Stm -> Maybe (Value,(Store Value))
 runStatement s = (runStateT (interp s) []) 
 
 
@@ -196,7 +204,16 @@ data FoasProp = FoasT
 {- 
 data PhoasValue a =  PVal Value
                 | PVar a -}
-
+prettyPrint :: FoasProp->String
+prettyPrint FoasT = "True"
+prettyPrint FoasF = "False"
+prettyPrint( FoasCmp relop s1 s2) =  "("++show s1 ++ " "++ show relop ++" "++ show s2++")" -- these can be both LVars as values 
+prettyPrint (FoasNot p) = "-"++ prettyPrint p
+prettyPrint( FoasAnd p1 p2) = "("++prettyPrint p1 ++ "/\\" ++ prettyPrint p2 ++")"
+prettyPrint (FoasOr p1 p2) = "("++ prettyPrint p1 ++ "\\/" ++ prettyPrint p2++")"
+prettyPrint (FoasImplies p1 p2) = "("++ prettyPrint p1 ++ "=>" ++ prettyPrint p2 ++ ")"
+prettyPrint (FoasExist lvar p ) = "("++ "!"++ lvar ++ ":"++ prettyPrint p ++ ")"
+prettyPrint (FoasForall lvar p) = "("++ "?"++ lvar ++":"++ prettyPrint p ++ ")"
 
 class Ring v where
     lit :: Value->v
@@ -325,14 +342,14 @@ type PhoasProposition = forall a. forall p. Proposition p a => p -}
 
 
 data Contract v =  ForallC (Maybe String) (v -> Contract v) -- forAll logicVariables {Precondition} Program {Int->Postcondition}
-    | HoareTriple (PhoasProp v) Prog [v] (v->Store->PhoasProp v)
+    | HoareTriple (PhoasProp v) Prog [v] (v->(Store v)->PhoasProp v)
 
 
 
 absoluteValueContract :: Ring v => Contract v
 --absoluteValueContract = MkContract ["x"] T absoluteValue (\x -> )
 --absoluteValueContract = MkContract ["x"] T absoluteValue (\x -> And (Cmp GreaterThan x 0) (T))
-absoluteValueContract = ForallC Nothing (\x->HoareTriple PhoasT absoluteValue [x] (\result _->PhoasAnd (PhoasCmp GreaterThan result (lit 0)) (PhoasCmp GreaterThanEqual result x)))
+absoluteValueContract = ForallC (Just "x") (\x->HoareTriple PhoasT absoluteValue [x] (\result _->PhoasAnd (PhoasCmp GreaterThan result (lit 0)) (PhoasCmp GreaterThanEqual result x)))
 
 
 
@@ -364,7 +381,7 @@ demonic m = Wpure $ (\post-> PhoasForall m (\v->post v))
 
 
 
-newtype Wstore v a = Wstore {runWstore :: (a->Store->PhoasProp v)->Store->PhoasProp v}
+newtype Wstore v a = Wstore {runWstore :: (a->(Store v)->PhoasProp v)->(Store v)->PhoasProp v}
 instance Functor (Wstore v) where
   fmap = liftM
 instance Applicative (Wstore v) where
@@ -400,10 +417,10 @@ assume p = Wstore $ (\post store-> PhoasImplies p (post () store))
 
 
 
-evalStore ::Ring v => Wstore v a ->Store-> Wpure v a 
+evalStore ::Ring v => Wstore v a ->(Store v)-> Wpure v a 
 evalStore m store = Wpure $ (\post-> (runWstore m) (\a _->post a) store)
 
-pushStore ::Ring v => X->Value -> Wstore v ()
+pushStore ::Ring v => X->v -> Wstore v ()
 pushStore x v = Wstore $ (\post store->post () (pushL x v store))
 
 popStore :: Ring v =>Wstore v ()
@@ -421,21 +438,21 @@ matchBool_angelic cond m1 m2= (do assert cond;m1)
                               (do assert (PhoasNot cond);m2)
 
 
-assignWstore ::Ring v => X->Value->Wstore v ()
+assignWstore ::Ring v => X->v->Wstore v ()
 assignWstore x v = Wstore $ (\post store->post () (change x v store))
 
-lookupWstore ::Ring v => X->Wstore v Value
+lookupWstore ::Ring v => X->Wstore v v
 lookupWstore a = Wstore $ (\post store->case (Prelude.lookup a store) of
                                                 Nothing -> PhoasF
                                                 Just value -> post value store)
 
 -- turns a boolean expression into the proposition that is equivalent to the expression in the monadic Wstore environment
-execb :: Bexp->Wstore Value (PhoasProp Value)
+execb :: Ring v=> Bexp->Wstore v (PhoasProp v)
 execb (Compare op s1 s2) = do x <- exec s1
                               y <- exec s2
                               return (PhoasCmp op x y)
 
-exec :: Stm->Wstore Value Value
+exec :: Ring v=> Stm->Wstore v v
 exec (Lit c) = return $ lit c
 exec (Var a) = lookupWstore a
 exec (Add s1 s2) = do x <- exec s1
@@ -446,7 +463,7 @@ exec (Mul s1 s2) = do x <- exec s1
                       return (mul x y)
 exec (Minus s1 s2) = do x <- exec s1
                         y <- exec s2
-                        return (min x y)
+                        return (minus x y)
 exec (Assign var s) = do v <-exec s 
                          assignWstore var v
                          return v
@@ -482,17 +499,18 @@ observationPartial r = Wstore $ (\post s0-> case ((runStateT r) s0) of
 
 
 
-wpValue :: Stm -> (Value->Store->PhoasProp Value)->Store->PhoasProp Value
-wpValue stm post initStore = (runWstore (exec stm)) post initStore
+wp :: Ring v=>Stm -> (v->(Store v)->PhoasProp v)->(Store v)->PhoasProp v
+wp stm post initStore = (runWstore (exec stm)) post initStore
 
 
 
 
-vcValue :: Contract Value -> PhoasProp Value
-vcValue (ForallC mstring f) = PhoasForall mstring (\v -> vcValue (f v))
-vcValue (HoareTriple pre prog args post) = case prog of 
-  Fun functionName params body -> PhoasImplies pre (wpValue body post (zip params args))
+vc :: Ring v=>Contract v -> PhoasProp v
+vc (ForallC mstring f) = PhoasForall mstring (\v -> vc (f v))
+vc (HoareTriple pre prog args post) = case prog of 
+  Fun functionName params body -> PhoasImplies pre (wp body post (zip params args))
 
 --zip params args should be a Store.
 --it is only a Store if args is a list of Values
 
+main =  putStrLn $ prettyPrint $ phoas_to_foas $ vc absoluteValueContract
