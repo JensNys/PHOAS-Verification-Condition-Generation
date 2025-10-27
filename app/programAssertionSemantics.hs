@@ -16,7 +16,6 @@ import Data.Map as M
 --type Var = String
 type Value = Int
 type Store = [(X,Value)]
-type GStore v = [(X,v)]
 --program variables. They are immutable location
 type X = String
 --function names
@@ -431,23 +430,23 @@ lookupWstore a = Wstore $ (\post store->case (Prelude.lookup a store) of
                                                 Just value -> post value store)
 
 -- turns a boolean expression into the proposition that is equivalent to the expression in the monadic Wstore environment
-execb ::Ring v => Bexp->Wstore v (PhoasProp v)
+execb :: Bexp->Wstore Value (PhoasProp Value)
 execb (Compare op s1 s2) = do x <- exec s1
                               y <- exec s2
-                              return (PhoasCmp op (lit x) (lit y))
+                              return (PhoasCmp op x y)
 
-exec :: Ring v =>Stm->Wstore v Value
-exec (Lit c) = return c
+exec :: Stm->Wstore Value Value
+exec (Lit c) = return $ lit c
 exec (Var a) = lookupWstore a
 exec (Add s1 s2) = do x <- exec s1
                       y <- exec s2
-                      return (x+y)
+                      return (add x y)
 exec (Mul s1 s2) = do x <- exec s1
                       y <- exec s2
-                      return (x*y)
+                      return (mul x y)
 exec (Minus s1 s2) = do x <- exec s1
                         y <- exec s2
-                        return (x-y)
+                        return (min x y)
 exec (Assign var s) = do v <-exec s 
                          assignWstore var v
                          return v
@@ -467,32 +466,32 @@ exec (If bexp s1 s2) = do b <- execb bexp
 
 -- with normal state: θ St(m) = λpost s0. post (m s0)
 -- total correctness interpretation by doing F
-observationTotal :: Ring v => StateT Store Maybe a->Wstore v a 
+{- observationTotal :: Ring v => StateT (Store v) Maybe a->Wstore v a 
 observationTotal r = Wstore $ (\post s0-> case ((runStateT r) s0) of 
                                           Nothing -> PhoasF
                                           Just (a,store) -> post a store)
 
 -- with normal state: θ St(m) = λpost s0. post (m s0)
 -- partial correctness interpretation by doing T
-observationPartial :: Ring v => StateT Store Maybe a->Wstore v a 
+observationPartial :: Ring v => StateT (Store v) Maybe a->Wstore v a 
 observationPartial r = Wstore $ (\post s0-> case ((runStateT r) s0) of 
                                           Nothing -> PhoasT
-                                          Just (a,store) -> post a store)
+                                          Just (a,store) -> post a store) -}
 
 
 
 
 
-wp ::Ring v=> Stm -> (v->Store->PhoasProp v)->Store->PhoasProp v
-wp stm post initStore = (runWstore (exec stm)) post initStore
+wpValue :: Stm -> (Value->Store->PhoasProp Value)->Store->PhoasProp Value
+wpValue stm post initStore = (runWstore (exec stm)) post initStore
 
 
 
 
-vc :: Contract v -> PhoasProp v
-vc (ForallC mstring f) = PhoasForall mstring (\v -> vc (f v))
-vc (HoareTriple pre prog args post) = case prog of 
-  Fun functionName params body -> PhoasImplies pre (wp body post (zip params args))
+vcValue :: Contract Value -> PhoasProp Value
+vcValue (ForallC mstring f) = PhoasForall mstring (\v -> vcValue (f v))
+vcValue (HoareTriple pre prog args post) = case prog of 
+  Fun functionName params body -> PhoasImplies pre (wpValue body post (zip params args))
 
 --zip params args should be a Store.
 --it is only a Store if args is a list of Values
