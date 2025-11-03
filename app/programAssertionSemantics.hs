@@ -215,13 +215,14 @@ prettyPrint (FoasImplies p1 p2) = "("++ prettyPrint p1 ++ "=>" ++ prettyPrint p2
 prettyPrint (FoasExist lvar p ) = "("++ "!"++ lvar ++ ":"++ prettyPrint p ++ ")"
 prettyPrint (FoasForall lvar p) = "("++ "?"++ lvar ++":"++ prettyPrint p ++ ")"
 
-class Ring v where
+--expression algebra
+class ValueAlgebra v where
     lit :: Value->v
     add :: v -> v -> v
     minus :: v -> v -> v
     mul :: v -> v -> v
 
-data Ring v => PhoasProp v = PhoasT 
+data PhoasProp v = PhoasT 
     | PhoasF 
     | PhoasCmp Relop v v  -- these can be both LVars as values 
     | PhoasNot (PhoasProp v)
@@ -235,14 +236,14 @@ data Ring v => PhoasProp v = PhoasT
 
 
 -- typeclass for the operations on Values.
-instance Ring Stm where
+instance ValueAlgebra Stm where
   lit = Lit
   add = Add
   mul = Mul
   minus = Minus
 
 
-instance Ring Int where
+instance ValueAlgebra Int where
   lit = id
   add = (+)
   mul = (*)
@@ -250,7 +251,7 @@ instance Ring Int where
 
 
 
-instance Ring (Reader Int Stm) where
+instance ValueAlgebra (Reader Int Stm) where
   lit i = return $ Lit i
   add x y = do v1 <- x
                v2 <- y
@@ -301,11 +302,13 @@ quantifiers_to_foas_reader :: Maybe String -> ((ReaderInt Stm)->PhoasProp (Reade
 quantifiers_to_foas_reader  m f quantifier=do i <- ask
                                               let arg = "x" ++ show i
 
-                                              body <- case m of 
-                                                Nothing -> (local (+1) $ phoas_to_foas_reader $ (f (return (Var arg))))
-                                                Just s ->               (phoas_to_foas_reader $ (f (return (Var s))))
-
-                                              return $ quantifier arg body
+                                              case m of 
+                                                Nothing -> do
+                                                   body <- (local (+1) $ phoas_to_foas_reader $ (f (return (Var arg))))
+                                                   return $ quantifier arg body
+                                                Just s -> do
+                                                   body <-              (phoas_to_foas_reader $ (f (return (Var s))))
+                                                   return $ quantifier s body
                                               
 
 
@@ -316,7 +319,7 @@ binary_prop_to_foas_reader p1 p2 bin = do r1 <- phoas_to_foas_reader p1
                                           return $ bin r1 r2
 
 -- forall x, there exist y: x<y /\ 0<y
-phoas_example ::Ring v => PhoasProp v
+phoas_example ::ValueAlgebra v => PhoasProp v
 phoas_example= PhoasForall Nothing (\x->PhoasExist Nothing (\y->(PhoasAnd (PhoasCmp LessThanEqual x y) (PhoasCmp LessThanEqual (lit 0) y))))
 
 foas_example :: FoasProp
@@ -337,6 +340,17 @@ foas_example = FoasForall "x0" (FoasExist "x1" (FoasAnd (FoasCmp LessThanEqual (
 type PhoasProposition = forall a. forall p. Proposition p a => p -}
 
 
+foas_to_phoas :: FoasProp->PhoasProp v
+foas_to_phoas p = PhoasT
+
+
+
+-- the result variable should be named "Result"
+data FirstOrderContract = MkContract [LVar] (FoasProp) Prog [LVar] LVar FoasProp
+--                universalQuantifications precondition Program Parameters Postcondition
+
+firstOrderAbsContract :: FirstOrderContract
+firstOrderAbsContract=  MkContract ["x"] (FoasT) absoluteValue ["x"] "result" $ FoasAnd (FoasCmp GreaterThanEqual (Var "result") (Lit 0)) (FoasCmp GreaterThanEqual (Var "result") (Var "x"))
 
 
 
@@ -346,10 +360,10 @@ data Contract v =  ForallC (Maybe String) (v -> Contract v) -- forAll logicVaria
 
 
 
-absoluteValueContract :: Ring v => Contract v
+absoluteValueContract :: ValueAlgebra v => Contract v
 --absoluteValueContract = MkContract ["x"] T absoluteValue (\x -> )
 --absoluteValueContract = MkContract ["x"] T absoluteValue (\x -> And (Cmp GreaterThan x 0) (T))
-absoluteValueContract = ForallC (Just "x") (\x->HoareTriple PhoasT absoluteValue [x] (\result _->PhoasAnd (PhoasCmp GreaterThan result (lit 0)) (PhoasCmp GreaterThanEqual result x)))
+absoluteValueContract = ForallC (Just "x") (\x->HoareTriple PhoasT absoluteValue [x] (\result _->PhoasAnd (PhoasCmp GreaterThanEqual result (lit 0)) (PhoasCmp GreaterThanEqual result x)))
 
 
 
@@ -370,10 +384,10 @@ instance Monad (Wpure v) where
 
 
 
-angelic :: Ring v =>Maybe String -> Wpure v v
+angelic :: ValueAlgebra v =>Maybe String -> Wpure v v
 angelic m = Wpure $ (\post-> PhoasExist m (\v->post v))
 
-demonic :: Ring v => Maybe String -> Wpure v v
+demonic :: ValueAlgebra v => Maybe String -> Wpure v v
 demonic m = Wpure $ (\post-> PhoasForall m (\v->post v))
 
 
@@ -393,66 +407,66 @@ instance Monad (Wstore v) where
     c >>= k = Wstore $ (\post store1-> (runWstore c) (\a store2->runWstore (k a) post store2) store1)
 
 
-block :: Ring v =>Wstore v a
+block :: ValueAlgebra v =>Wstore v a
 block = Wstore $ (\_ _->PhoasT)
 
-fail :: Ring v =>Wstore v a
+fail :: ValueAlgebra v =>Wstore v a
 fail = Wstore $ (\_ _->PhoasF)
 
 -- unicode 2295
-(⊕) ::Ring v => Wstore v a->Wstore v a -> Wstore v a
+(⊕) ::ValueAlgebra v => Wstore v a->Wstore v a -> Wstore v a
 m1 ⊕ m2 = Wstore $ (\post store-> PhoasOr ((runWstore m1) post store) ((runWstore m2) post store))
 
-(⊗) :: Ring v =>Wstore v a->Wstore v a -> Wstore v a
+(⊗) :: ValueAlgebra v =>Wstore v a->Wstore v a -> Wstore v a
 m1 ⊗ m2 = Wstore $ (\post store -> PhoasAnd ((runWstore m1) post store) ((runWstore m2) post store))
 
 
-assert :: Ring v =>PhoasProp v -> Wstore v ()
+assert :: ValueAlgebra v =>PhoasProp v -> Wstore v ()
 assert p = Wstore $ (\post store-> PhoasAnd p (post () store))
 
-assume :: Ring v =>PhoasProp v -> Wstore v ()
+assume :: ValueAlgebra v =>PhoasProp v -> Wstore v ()
 assume p = Wstore $ (\post store-> PhoasImplies p (post () store))
 
 
 
 
 
-evalStore ::Ring v => Wstore v a ->(Store v)-> Wpure v a 
+evalStore ::ValueAlgebra v => Wstore v a ->(Store v)-> Wpure v a 
 evalStore m store = Wpure $ (\post-> (runWstore m) (\a _->post a) store)
 
-pushStore ::Ring v => X->v -> Wstore v ()
+pushStore ::ValueAlgebra v => X->v -> Wstore v ()
 pushStore x v = Wstore $ (\post store->post () (pushL x v store))
 
-popStore :: Ring v =>Wstore v ()
+popStore :: ValueAlgebra v =>Wstore v ()
 popStore = Wstore $ (\post store -> post () (popL store))
 
 -- the cond parameter should be 
-matchBool_demonic :: Ring v =>PhoasProp v-> Wstore v a-> Wstore v a-> Wstore v a
+matchBool_demonic :: ValueAlgebra v =>PhoasProp v-> Wstore v a-> Wstore v a-> Wstore v a
 matchBool_demonic cond m1 m2= (do assume cond;m1) 
                               ⊗
                               (do assume (PhoasNot cond);m2)
 
-matchBool_angelic :: Ring v =>PhoasProp v-> Wstore v a-> Wstore v a-> Wstore v a
+matchBool_angelic :: ValueAlgebra v =>PhoasProp v-> Wstore v a-> Wstore v a-> Wstore v a
 matchBool_angelic cond m1 m2= (do assert cond;m1) 
                               ⊕
                               (do assert (PhoasNot cond);m2)
 
 
-assignWstore ::Ring v => X->v->Wstore v ()
+assignWstore ::ValueAlgebra v => X->v->Wstore v ()
 assignWstore x v = Wstore $ (\post store->post () (change x v store))
 
-lookupWstore ::Ring v => X->Wstore v v
+lookupWstore ::ValueAlgebra v => X->Wstore v v
 lookupWstore a = Wstore $ (\post store->case (Prelude.lookup a store) of
                                                 Nothing -> PhoasF
                                                 Just value -> post value store)
 
 -- turns a boolean expression into the proposition that is equivalent to the expression in the monadic Wstore environment
-execb :: Ring v=> Bexp->Wstore v (PhoasProp v)
+execb :: ValueAlgebra v=> Bexp->Wstore v (PhoasProp v)
 execb (Compare op s1 s2) = do x <- exec s1
                               y <- exec s2
                               return (PhoasCmp op x y)
 
-exec :: Ring v=> Stm->Wstore v v
+exec :: ValueAlgebra v=> Stm->Wstore v v
 exec (Lit c) = return $ lit c
 exec (Var a) = lookupWstore a
 exec (Add s1 s2) = do x <- exec s1
@@ -475,7 +489,7 @@ exec (Let var s1 s2) = do x <- exec s1 -- p -- in a later stage we could let thi
 exec (Seq s1 s2) = do _ <- exec s1
                       exec s2
 exec (If bexp s1 s2) = do b <- execb bexp
-                          matchBool_angelic b (exec s1) (exec s2)
+                          matchBool_demonic b (exec s1) (exec s2)
 
 
 
@@ -483,35 +497,37 @@ exec (If bexp s1 s2) = do b <- execb bexp
 
 -- with normal state: θ St(m) = λpost s0. post (m s0)
 -- total correctness interpretation by doing F
-{- observationTotal :: Ring v => StateT (Store v) Maybe a->Wstore v a 
+{- observationTotal :: ValueAlgebra v => StateT (Store v) Maybe a->Wstore v a 
 observationTotal r = Wstore $ (\post s0-> case ((runStateT r) s0) of 
                                           Nothing -> PhoasF
                                           Just (a,store) -> post a store)
 
 -- with normal state: θ St(m) = λpost s0. post (m s0)
 -- partial correctness interpretation by doing T
-observationPartial :: Ring v => StateT (Store v) Maybe a->Wstore v a 
+observationPartial :: ValueAlgebra v => StateT (Store v) Maybe a->Wstore v a 
 observationPartial r = Wstore $ (\post s0-> case ((runStateT r) s0) of 
                                           Nothing -> PhoasT
                                           Just (a,store) -> post a store) -}
 
 
 
+-- Print Scope type_scope. Coq
 
-
-wp :: Ring v=>Stm -> (v->(Store v)->PhoasProp v)->(Store v)->PhoasProp v
+wp :: ValueAlgebra v=>Stm -> (v->(Store v)->PhoasProp v)->(Store v)->PhoasProp v
 wp stm post initStore = (runWstore (exec stm)) post initStore
 
 
 
 
-vc :: Ring v=>Contract v -> PhoasProp v
+vc :: ValueAlgebra v=>Contract v -> PhoasProp v
 vc (ForallC mstring f) = PhoasForall mstring (\v -> vc (f v))
 vc (HoareTriple pre prog args post) = case prog of 
   Fun _ params body -> PhoasImplies pre (wp body post (zip params args))
 
 --zip params args should be a Store.
 --it is only a Store if args is a list of Values
+
+--locate coq
 
 main ::IO ()
 main =  putStrLn $ prettyPrint $ phoas_to_foas $ vc absoluteValueContract

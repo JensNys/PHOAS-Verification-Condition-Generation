@@ -50,6 +50,16 @@
   (major1) == 2 && (major2) <  2 || \
   (major1) == 2 && (major2) == 2 && (minor) <= 2)
 #endif /* MIN_VERSION_mtl */
+/* package sbv-10.8 */
+#ifndef VERSION_sbv
+#define VERSION_sbv "10.8"
+#endif /* VERSION_sbv */
+#ifndef MIN_VERSION_sbv
+#define MIN_VERSION_sbv(major1,major2,minor) (\
+  (major1) <  10 || \
+  (major1) == 10 && (major2) <  8 || \
+  (major1) == 10 && (major2) == 8 && (minor) <= 0)
+#endif /* MIN_VERSION_sbv */
 /* package transformers-0.5.6.2 */
 #ifndef VERSION_transformers
 #define VERSION_transformers "0.5.6.2"
