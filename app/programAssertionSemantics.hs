@@ -206,14 +206,12 @@ prettyPrint :: FoasProp->String
 prettyPrint FoasT = "True"
 prettyPrint FoasF = "False"
 prettyPrint( FoasCmp relop s1 s2) =  "("++ show s1 ++ " "++ show relop ++" "++ show s2++")" -- these can be both LVars as values 
-prettyPrint (FoasNot p) = "~"++ "(" prettyPrint p ++")"
+prettyPrint (FoasNot p) = "~"++ "(" ++ prettyPrint p ++")"
 prettyPrint( FoasAnd p1 p2) = "("++prettyPrint p1 ++ "/\\" ++ prettyPrint p2 ++")"
 prettyPrint (FoasOr p1 p2) = "("++ prettyPrint p1 ++ "\\/" ++ prettyPrint p2++")"
 prettyPrint (FoasImplies p1 p2) = "("++ prettyPrint p1 ++ "->" ++ prettyPrint p2 ++ ")"
 prettyPrint (FoasExist lvar p ) = "("++ "!"++ lvar ++ ":"++ prettyPrint p ++ ")"
 prettyPrint (FoasForall lvar p) = "("++ "?"++ lvar ++":"++ prettyPrint p ++ ")"
-
-coqShowRelop :: Relop -> String
 
 
 
@@ -552,22 +550,20 @@ vc (HoareTriple pre prog args post) = case prog of
 --locate coq
 
 main ::IO ()
-main =  putStrLn $ prettyPrint $ phoas_to_foas $ vc absoluteValueContract
+main =  makeCoqFile "absoluteValueContract" $ phoas_to_foas $ vc absoluteValueContract
 
 
 --(?x:(True=>(((Var "x" < Lit 0)=>((Minus (Lit 0) (Var "x") >= Lit 0)/\(Minus (Lit 0) (Var "x") >= Var "x")))/\(-(Var "x" < Lit 0)=>((Var "x" >= Lit 0)/\(Var "x" >= Var "x"))))))
 foas_to_coq_formula :: FoasProp -> String
-
-
 foas_to_coq_formula FoasT = "True"
 foas_to_coq_formula FoasF = "False"
-foas_to_coq_formula( FoasCmp relop s1 s2) =  "("++show s1 ++ " "++ show relop ++" "++ show s2++")" -- these can be both LVars as values 
-foas_to_coq_formula (FoasNot p) = "-"++ foas_to_coq_formula p
+foas_to_coq_formula( FoasCmp relop s1 s2) =  "("++  showCoq relop ++" "++showCoqStm s1 ++" "++ showCoqStm s2++")" -- these can be both LVars as values 
+foas_to_coq_formula (FoasNot p) = "~"++ foas_to_coq_formula p
 foas_to_coq_formula( FoasAnd p1 p2) = "("++foas_to_coq_formula p1 ++ "/\\" ++ foas_to_coq_formula p2 ++")"
 foas_to_coq_formula (FoasOr p1 p2) = "("++ foas_to_coq_formula p1 ++ "\\/" ++ foas_to_coq_formula p2++")"
-foas_to_coq_formula (FoasImplies p1 p2) = "("++ foas_to_coq_formula p1 ++ "=>" ++ foas_to_coq_formula p2 ++ ")"
-foas_to_coq_formula (FoasExist lvar p ) = "("++ "!"++ lvar ++ ":"++ foas_to_coq_formula p ++ ")"
-foas_to_coq_formula (FoasForall lvar p) = "("++ "?"++ lvar ++":"++ foas_to_coq_formula p ++ ")"
+foas_to_coq_formula (FoasImplies p1 p2) = "("++ foas_to_coq_formula p1 ++ "->" ++ foas_to_coq_formula p2 ++ ")"
+foas_to_coq_formula (FoasExist lvar p ) = "("++ "exists "++ lvar ++ " : Z, "++ foas_to_coq_formula p ++ ")"
+foas_to_coq_formula (FoasForall lvar p) = "("++ "forall "++ lvar ++ " : Z, "++ foas_to_coq_formula p ++ ")"
 
 showCoq :: Relop->String
 showCoq Equal = "eq"
@@ -577,13 +573,24 @@ showCoq LessThanEqual = "Z.le"
 showCoq GreaterThanEqual = "Z.ge"
 
 showCoqStm :: Stm->String
-
 showCoqStm (Lit value) = show value
-showCoqStm (Var x) = show x
-showCoqStm (Add s1 s2) = "(Z.add "++ showCoq s1 ++ " " ++ showCoq s2 ++ ")"
-showCoqStm (Mul Stm Stm) = "(Z.mul "++ showCoq s1 ++ " " ++ showCoq s2 ++ ")"
-showCoqStm (Minus Stm Stm) = "(Z.sub "++ showCoq s1 ++ " " ++ showCoq s2 ++ ")"
-showCoqStm( Assign X Stm) -- x := Stm (update a variable)
-showCoqStm (Let X Stm Stm -)- let X = Stm where Stm (make a new variable)
-showCoqStm (Seq Stm Stm) --e1;e2
-showCoqStm (If Bexp Stm Stm) -- if bexp then stm else stm
+showCoqStm (Var x) = x
+showCoqStm (Add s1 s2) = "(Z.add "++ showCoqStm s1 ++ " " ++ showCoqStm s2 ++ ")"
+showCoqStm (Mul s1 s2) = "(Z.mul "++ showCoqStm s1 ++ " " ++ showCoqStm s2 ++ ")"
+showCoqStm (Minus s1 s2) = "(Z.sub "++ showCoqStm s1 ++ " " ++ showCoqStm s2 ++ ")"
+showCoqStm( Assign x s) =""-- x := Stm (update a variable)
+showCoqStm (Let x s1 s2)=""
+showCoqStm (Seq s1 s2)=""
+showCoqStm (If b s1 s2)="" -- if bexp then stm else stm
+
+makeCoqTheorem :: String -> FoasProp->String
+makeCoqTheorem name formula = "Theorem "++name++" :\n" ++ foas_to_coq_formula formula ++".\nProof.\nlia.\nQed."
+
+
+makeCoqFileContent :: String -> FoasProp->String
+makeCoqFileContent name formula = "Require Import ZArith.\nRequire Import Lia.\nOpen Scope Z_scope.\n\n" ++ makeCoqTheorem name formula
+
+
+
+makeCoqFile :: String -> FoasProp->IO ()
+makeCoqFile name formula = writeFile (name ++ ".v") (makeCoqFileContent name formula)
