@@ -9,6 +9,7 @@ module Week1.LambdaCalculi where
 import Control.Monad.Reader
 import Control.Monad.State
 import Data.Char
+import Data.Map
 
 data Foas_Exp = Var String
     | Lambda String Foas_Exp
@@ -267,5 +268,51 @@ phoas_to_foas' a = runReader (go a) 0
                          return $ Lambda arg body
     go (PVar a) = a
 
+---------------------------------------------------------------
 
 
+--type Hoas' = forall exp. UntypedLambda exp => [exp] -> exp
+
+
+{- 
+toTerm' :: UntypedLambda exp => ([exp] -> exp)-> DBTerm
+toTerm' v = unDB w 0
+    where w = v (env 0)
+          env j = DB (λi → DBVar (i+j)) : env (j+1)
+
+
+
+fromTerm' :: UntypedLambda exp => DBTerm -> [exp] -> exp
+fromTerm' (DBVar i) env = env !! i
+fromTerm' (DBLam t) env = lam (λx → fromTerm' t (x:env))
+fromTerm' (DBApp x y) env = fromTerm' x env `app` fromTerm' y env -}
+
+
+
+foas_to_hoas :: Foas_Exp->Phoas_Exp a
+foas_to_hoas foas = foas_to_hoas_env foas empty
+
+
+{- foas_to_hoas_env ::Foas_Exp->(Map String a)->Maybe (Phoas_Exp a)
+foas_to_hoas_env (Var str) env = case (Data.Map.lookup env str ) of
+                                Nothing -> Nothing
+                                Just v -> Just (PVar v)
+foas_to_hoas_env (Lambda string fexp) env = PLambda (\v ->foas_to_hoas_env fexp (insert string v env))
+-- if it is the constant map to Nothing, We should return Nothing, else Just $ Plambda (\v ->foas_to_hoas_env fexp (insert string v env)). 
+-- I can't just give a random variable and generalising the result because it would require instantiating the type parameter
+
+
+foas_to_hoas_env (App l r) env = do x <- (foas_to_hoas_env l env)
+                                    y <- (foas_to_hoas_env r env)
+                                    return $ PApp x y -}
+
+foas_to_hoas_env ::Foas_Exp->(Map String a)->(Phoas_Exp a)
+foas_to_hoas_env (Var str) env = case (Data.Map.lookup str env ) of
+                                Nothing -> error $ "foas formula is not well formed. "++str ++" is not in scope"
+                                Just v -> PVar v
+foas_to_hoas_env (Lambda string fexp) env = PLambda (\v ->foas_to_hoas_env fexp (insert string v env))
+-- if it is the constant map to Nothing, We should return Nothing, else Just $ Plambda (\v ->foas_to_hoas_env fexp (insert string v env)). 
+-- I can't just give a random variable and generalising the result because it would require instantiating the type parameter
+foas_to_hoas_env (App l r) env = PApp (foas_to_hoas_env l env) (foas_to_hoas_env r env)
+    
+    

@@ -24,13 +24,12 @@ type F = String
 
 data Prog = Fun F [X] Stm
 
-data Relop = Equal | LessThan | GreaterThan | NotEqual | LessThanEqual | GreaterThanEqual
+data Relop = Equal | LessThan | GreaterThan | LessThanEqual | GreaterThanEqual
   deriving (Eq)
 instance Show Relop where
   show Equal = "=="
   show LessThan ="<"
   show GreaterThan=">"
-  show NotEqual = "!="
   show LessThanEqual = "<="
   show GreaterThanEqual = ">="
 
@@ -97,7 +96,6 @@ toFunc :: Relop -> (Int->Int->Bool)
 toFunc Equal = (==)
 toFunc LessThan = (<)
 toFunc GreaterThan = (>)
-toFunc NotEqual = (/=)
 toFunc LessThanEqual = (<=)
 toFunc GreaterThanEqual = (>=)
 
@@ -207,13 +205,17 @@ data PhoasValue a =  PVal Value
 prettyPrint :: FoasProp->String
 prettyPrint FoasT = "True"
 prettyPrint FoasF = "False"
-prettyPrint( FoasCmp relop s1 s2) =  "("++show s1 ++ " "++ show relop ++" "++ show s2++")" -- these can be both LVars as values 
-prettyPrint (FoasNot p) = "-"++ prettyPrint p
+prettyPrint( FoasCmp relop s1 s2) =  "("++ show s1 ++ " "++ show relop ++" "++ show s2++")" -- these can be both LVars as values 
+prettyPrint (FoasNot p) = "~"++ "(" prettyPrint p ++")"
 prettyPrint( FoasAnd p1 p2) = "("++prettyPrint p1 ++ "/\\" ++ prettyPrint p2 ++")"
 prettyPrint (FoasOr p1 p2) = "("++ prettyPrint p1 ++ "\\/" ++ prettyPrint p2++")"
-prettyPrint (FoasImplies p1 p2) = "("++ prettyPrint p1 ++ "=>" ++ prettyPrint p2 ++ ")"
+prettyPrint (FoasImplies p1 p2) = "("++ prettyPrint p1 ++ "->" ++ prettyPrint p2 ++ ")"
 prettyPrint (FoasExist lvar p ) = "("++ "!"++ lvar ++ ":"++ prettyPrint p ++ ")"
 prettyPrint (FoasForall lvar p) = "("++ "?"++ lvar ++":"++ prettyPrint p ++ ")"
+
+coqShowRelop :: Relop -> String
+
+
 
 --expression algebra
 class ValueAlgebra v where
@@ -339,9 +341,29 @@ foas_example = FoasForall "x0" (FoasExist "x1" (FoasAnd (FoasCmp LessThanEqual (
 
 type PhoasProposition = forall a. forall p. Proposition p a => p -}
 
+{- stm_to_parametric :: ValueAlgebra v => Stm -> v
+stm_to_parametric (Lit v) = lit v
+    | Var X
+    | Add Stm Stm
+    | Mul Stm Stm
+    | Minus Stm Stm
+    | Assign X Stm -- x := Stm (update a variable)
+    | Let X Stm Stm -- let X = Stm where Stm (make a new variable)
+    | Seq Stm Stm --e1;e2
+    | If Bexp Stm Stm -- if bexp then stm else stm -}
 
-foas_to_phoas :: FoasProp->PhoasProp v
-foas_to_phoas p = PhoasT
+
+
+{- foas_to_phoas :: ValueAlgebra v => FoasProp->PhoasProp v
+foas_to_phoas FoasT = PhoasT 
+foas_to_phoas FoasF    | PhoasF 
+foas_to_phoas FoasCmp   | PhoasCmp Relop v v  -- these can be both LVars as values 
+foas_to_phoas FoasNot p   | PhoasNot (foas_to_phoas p)
+foas_to_phoas FoasAnd p1 p2   | PhoasAnd (foas_to_phoas p1) (foas_to_phoas p2)
+foas_to_phoas FoasOr    | PhoasOr (foas_to_phoas p1) (foas_to_phoas p2)
+foas_to_phoas    | PhoasImplies (foas_to_phoas p) (foas_to_phoas p)
+foas_to_phoas    | PhoasExist (Maybe String) (v->(PhoasProp v))
+foas_to_phoas    | PhoasForall (Maybe String) (v->(PhoasProp v)) -}
 
 
 
@@ -531,3 +553,37 @@ vc (HoareTriple pre prog args post) = case prog of
 
 main ::IO ()
 main =  putStrLn $ prettyPrint $ phoas_to_foas $ vc absoluteValueContract
+
+
+--(?x:(True=>(((Var "x" < Lit 0)=>((Minus (Lit 0) (Var "x") >= Lit 0)/\(Minus (Lit 0) (Var "x") >= Var "x")))/\(-(Var "x" < Lit 0)=>((Var "x" >= Lit 0)/\(Var "x" >= Var "x"))))))
+foas_to_coq_formula :: FoasProp -> String
+
+
+foas_to_coq_formula FoasT = "True"
+foas_to_coq_formula FoasF = "False"
+foas_to_coq_formula( FoasCmp relop s1 s2) =  "("++show s1 ++ " "++ show relop ++" "++ show s2++")" -- these can be both LVars as values 
+foas_to_coq_formula (FoasNot p) = "-"++ foas_to_coq_formula p
+foas_to_coq_formula( FoasAnd p1 p2) = "("++foas_to_coq_formula p1 ++ "/\\" ++ foas_to_coq_formula p2 ++")"
+foas_to_coq_formula (FoasOr p1 p2) = "("++ foas_to_coq_formula p1 ++ "\\/" ++ foas_to_coq_formula p2++")"
+foas_to_coq_formula (FoasImplies p1 p2) = "("++ foas_to_coq_formula p1 ++ "=>" ++ foas_to_coq_formula p2 ++ ")"
+foas_to_coq_formula (FoasExist lvar p ) = "("++ "!"++ lvar ++ ":"++ foas_to_coq_formula p ++ ")"
+foas_to_coq_formula (FoasForall lvar p) = "("++ "?"++ lvar ++":"++ foas_to_coq_formula p ++ ")"
+
+showCoq :: Relop->String
+showCoq Equal = "eq"
+showCoq LessThan ="Z.lt"
+showCoq GreaterThan="Z.gt"
+showCoq LessThanEqual = "Z.le"
+showCoq GreaterThanEqual = "Z.ge"
+
+showCoqStm :: Stm->String
+
+showCoqStm (Lit value) = show value
+showCoqStm (Var x) = show x
+showCoqStm (Add s1 s2) = "(Z.add "++ showCoq s1 ++ " " ++ showCoq s2 ++ ")"
+showCoqStm (Mul Stm Stm) = "(Z.mul "++ showCoq s1 ++ " " ++ showCoq s2 ++ ")"
+showCoqStm (Minus Stm Stm) = "(Z.sub "++ showCoq s1 ++ " " ++ showCoq s2 ++ ")"
+showCoqStm( Assign X Stm) -- x := Stm (update a variable)
+showCoqStm (Let X Stm Stm -)- let X = Stm where Stm (make a new variable)
+showCoqStm (Seq Stm Stm) --e1;e2
+showCoqStm (If Bexp Stm Stm) -- if bexp then stm else stm
