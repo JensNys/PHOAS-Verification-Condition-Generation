@@ -295,6 +295,16 @@ phoas_to_foas_reader (PhoasImplies p1 p2)= binary_prop_to_foas_reader p1 p2 Foas
 phoas_to_foas_reader (PhoasExist m f)    = quantifiers_to_foas_reader m f FoasExist
 phoas_to_foas_reader (PhoasForall m f)   = quantifiers_to_foas_reader m f FoasForall
 
+phoas_to_hoas ::  PhoasProp Value-> Prop
+phoas_to_hoas PhoasT = T
+phoas_to_hoas PhoasF = F
+phoas_to_hoas (PhoasCmp op l r) = Cmp op l r
+phoas_to_hoas (PhoasNot p) = Not  (phoas_to_hoas p)
+phoas_to_hoas (PhoasAnd p1 p2)    = And (phoas_to_hoas p1) (phoas_to_hoas p2)
+phoas_to_hoas (PhoasOr p1 p2)     = Or (phoas_to_hoas p1) (phoas_to_hoas p2)
+phoas_to_hoas (PhoasImplies p1 p2)= Implies (phoas_to_hoas p1) (phoas_to_hoas p2)
+phoas_to_hoas (PhoasExist m f)    = Exist (phoas_to_hoas . f)
+phoas_to_hoas (PhoasForall m f)   = Forall (phoas_to_hoas . f)
 
 
 -- interprets a quantifier
