@@ -377,7 +377,7 @@ foas_to_phoas    | PhoasForall (Maybe String) (v->(PhoasProp v)) -}
 
 -- the result variable should be named "Result"
 data FirstOrderContract = MkContract [LVar] (FoasProp) Prog [LVar] LVar FoasProp
---                universalQuantifications precondition Program Parameters Postcondition
+--                universalQuantifications precondition Program Parameters ResultName Postcondition
 
 firstOrderAbsContract :: FirstOrderContract
 firstOrderAbsContract=  MkContract ["x"] (FoasT) absoluteValue ["x"] "result" $ FoasAnd (FoasCmp GreaterThanEqual (Var "result") (Lit 0)) (FoasCmp GreaterThanEqual (Var "result") (Var "x"))
@@ -588,7 +588,7 @@ showCoqStm (Var x) = x
 showCoqStm (Add s1 s2) = "(Z.add "++ showCoqStm s1 ++ " " ++ showCoqStm s2 ++ ")"
 showCoqStm (Mul s1 s2) = "(Z.mul "++ showCoqStm s1 ++ " " ++ showCoqStm s2 ++ ")"
 showCoqStm (Minus s1 s2) = "(Z.sub "++ showCoqStm s1 ++ " " ++ showCoqStm s2 ++ ")"
-showCoqStm( Assign x s) =""-- x := Stm (update a variable)
+showCoqStm (Assign x s) =""-- x := Stm (update a variable)
 showCoqStm (Let x s1 s2)=""
 showCoqStm (Seq s1 s2)=""
 showCoqStm (If b s1 s2)="" -- if bexp then stm else stm
@@ -604,3 +604,33 @@ makeCoqFileContent name formula = "Require Import ZArith.\nRequire Import Lia.\n
 
 makeCoqFile :: String -> FoasProp->IO ()
 makeCoqFile name formula = writeFile (name ++ ".v") (makeCoqFileContent name formula)
+
+
+
+---- foas to phoas
+foas_to_phoas :: ValueAlgebra a => FoasProp -> PhoasProp a
+foas_to_phoas f = foas_to_phoas' f empty
+
+foas_to_phoas' :: ValueAlgebra a => FoasProp -> Map LVar a -> PhoasProp a
+foas_to_phoas' FoasT env = PhoasT
+foas_to_phoas' FoasF env = PhoasF
+foas_to_phoas' (FoasCmp relop s1 s2) env = PhoasCmp relop (statement_to_algebra s1 env) (statement_to_algebra s2 env)
+foas_to_phoas' (FoasNot p) env =  PhoasNot  (foas_to_phoas' p env)
+foas_to_phoas' (FoasAnd p1 p2) env = PhoasAnd (foas_to_phoas' p1 env) (foas_to_phoas' p2 env)
+foas_to_phoas' (FoasOr p1 p2) env = PhoasOr (foas_to_phoas' p1 env) (foas_to_phoas' p2 env)
+foas_to_phoas' (FoasImplies p1 p2) env = PhoasImplies (foas_to_phoas' p1 env) (foas_to_phoas' p2 env)
+foas_to_phoas' (FoasExist lvar p ) env = PhoasExist (Just lvar) (\v -> foas_to_phoas' p (insert lvar v env))
+foas_to_phoas' (FoasForall lvar p) env = PhoasForall (Just lvar) (\v -> foas_to_phoas' p (insert lvar v env))
+
+statement_to_algebra :: ValueAlgebra a => Stm -> Map LVar a -> a
+statement_to_algebra (Lit v) env= lit v
+statement_to_algebra (Var x) env = case (M.lookup x env) of
+                                Nothing -> error $ "foas formula is not well formed. "++ x ++" is not in scope"
+                                Just v -> v 
+statement_to_algebra (Add s1 s2)   env = add (statement_to_algebra s1 env) (statement_to_algebra s2 env)
+statement_to_algebra (Mul s1 s2)   env = mul (statement_to_algebra s1 env) (statement_to_algebra s2 env)
+statement_to_algebra (Minus s1 s2) env = minus (statement_to_algebra s1 env) (statement_to_algebra s2 env)
+statement_to_algebra (Assign x s)  env = error $ "not an expression"
+statement_to_algebra (Let x s1 s2) env = error $ "not an expression"
+statement_to_algebra (Seq s1 s2)   env = error $ "not an expression"
+statement_to_algebra (If b s1 s2)  env = error $ "not an expression" -- if bexp then stm else stm
