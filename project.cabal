@@ -60,10 +60,10 @@ executable project
     main-is:          Main.hs
 
     -- Modules included in this executable, other than Main.
-    -- other-modules:
-    --    Vcg.ProgrammingLanguage
-    --    Vcg.PropositionLanguages
-    --    Vcg.ConstraintGeneration
+    other-modules:
+        Vcg.ProgrammingLanguage
+        Vcg.PropositionLanguages
+        Vcg.ConstraintGeneration
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
