@@ -59,7 +59,7 @@ Print relation.
 End Order.
 
 Module LR.
-  (* different relation for every type in teh language*)
+  (* different relation for every type in the language*)
   (*similar: indexed family of  things  in proof assistants, first family of types (here Codes) then function that interprets code at some type.
     we work with STLC with base type Nat but don't define it here and use rocq types*)
   
