@@ -16,16 +16,6 @@ Set Implicit Arguments.
 
 
 
-Inductive Exp : Set :=
-  | Lit (n : nat)
-  | Var (x : string)
-  | Add (e1 e2 : Exp).
-  
-  
-Inductive Stm : Set :=
-  | Expr (e : Exp)
-  | Let (x : string) (e : Exp) (body:Stm).
-  
   
   
 
@@ -52,7 +42,17 @@ End listmap.
   
 (*important! gmap should be replaced with List (K * V) with lookup, add and remove in their interface for the semantics to remain right.*)
 
-
+Module ProgrammingLanguage.
+Inductive Exp : Set :=
+  | Lit (n : nat)
+  | Var (x : string)
+  | Add (e1 e2 : Exp).
+  
+  
+Inductive Stm : Set :=
+  | Expr (e : Exp)
+  | Let (x : string) (e : Exp) (body:Stm).
+  
   
 Definition value := nat.
 Definition eval_store := listmap.abstract_map value.
@@ -69,7 +69,6 @@ Since a contract and it postcondition makes a statement about terminating progra
 therefore in our case i don't think we have a need for a small-step semantics. *)
 
 
-Search gmap.
 
 (* big step semantics for expressions*)
 Inductive evalExp :  Exp -> eval_store -> option value->Prop :=
@@ -85,18 +84,45 @@ Inductive evalStm :  Stm -> eval_store -> (option value * eval_store)->Prop :=
   | EvalLetSucces  : forall x e body store store' result v, evalExp e store (Some v) -> evalStm body (listmap.insert x v store) (result,store')-> evalStm (Let x e body) store (result, listmap.delete x store') .
   
   
+End ProgrammingLanguage.
   
   
+
+
+
+
+
+(*------------------------------------------------------*)
+
+
+Module PhoasProp.
+
+Inductive Relop : Set :=
+  | Equal
+  | GreaterThan
+  | SmallerThan
+  | GreaterThanEqual
+  | SmallerThanEqual.
   
 
-
-
-
-
-
-
-
-
+Inductive prop (A : Set) : Set :=
+  | T
+  | F
+  | Cmp (r:Relop) (a : A) (b:A)
+  | Implies (l : phoasProp A) (r : phoasProp A)
+  | And (l : phoasProp A) (r : phoasProp A)
+  | Or (l : phoasProp A) (r : phoasProp A)
+  | Forall (f : A ->  phoasProp A).
+  
+  Class ValueAlgebra (V: Set) :=
+  {
+  lit : ProgrammingLanguage.value -> V;
+  add : V -> V -> V;
+  
+  
+  }
+  
+End PhoasProp.
 
 
 
