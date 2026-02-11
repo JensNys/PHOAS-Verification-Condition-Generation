@@ -55,6 +55,8 @@ Inductive Exp : Set :=
 Inductive Stm : Set :=
   | Expr (e : Exp)
   | Let (x : string) (e : Exp) (body:Stm).
+Inductive Prog : Set :=
+  | Fun (functionName : string) (param : string) (body : Stm).
   
 (* I use big step semantics because it is closer to the interpreter i already have. 
 The disadvantage of big step semantics is that it doesn't give a semantics to non-terminating programs. 
@@ -88,7 +90,7 @@ End PL.
 (*------------------------------------------------------*)
 
 
-Module PhoasProp.
+Module Phoas.
 Require Export ExtLib.Structures.Monads.
 
 Inductive Relop : Set :=
@@ -158,10 +160,10 @@ Inductive prop (A : Set) : Set :=
              ret (PL.Add v1 v2)))
   }.
   
-  
-  
-  
-End PhoasProp.
+  Inductive Contract (V:Set) := 
+     | CForall (f: V -> Contract V)
+     | HoareTriple (pre : prop V) (program : PL.Prog) (post : PL.value -> prop V).
+End Phoas.
 
 
 
