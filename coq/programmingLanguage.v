@@ -134,7 +134,7 @@ Inductive prop (A : Set) : Set :=
   }.
   
   Definition Reader (R A : Set) : Set := R->A.
-  Definition IntReader (R : Set) : Set := Reader Z R.
+  Definition IntReader (A : Set) : Set := Reader Z A.
   
   (*Class Monad (M : Set->Set) : Set:=
   {
@@ -142,15 +142,20 @@ Inductive prop (A : Set) : Set :=
   bind : forall {A B}, M A -> (A -> M B) -> M B
   }.*)
   
-  Instance intreader (A:Set) : Monad (IntReader A) :=
-  {
-  ret x = ().
-  }
+  Definition ret (A:Set) (a:A) : IntReader A := fun i => a.
+  Definition bind (A B:Set) (m : IntReader A) (k : A->IntReader B) : IntReader B :=
+  fun r => k (m r) r.
+  
+  
+  
+  
 
   Instance reader_valueAlgebra : ValueAlgebra (Z -> PL.Exp) :=
   {
-  lit := PL.Lit;
-  add := PL.Add
+  lit i:= ret (PL.Lit i);
+  add x y := bind x (fun v1 => 
+             bind y (fun v2 =>
+             ret (PL.Add v1 v2)))
   }.
   
   
