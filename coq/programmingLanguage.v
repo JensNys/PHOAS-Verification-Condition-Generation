@@ -14,8 +14,6 @@ Local Open Scope program_scope.
 
 Set Implicit Arguments.
 
-
-
   
   
 
@@ -42,9 +40,14 @@ End listmap.
   
 (*important! gmap should be replaced with List (K * V) with lookup, add and remove in their interface for the semantics to remain right.*)
 
-Module ProgrammingLanguage.
+Module PL.
+
+
+
+Definition value := Z.
+Definition eval_store := listmap.abstract_map value.
 Inductive Exp : Set :=
-  | Lit (n : nat)
+  | Lit (n : value)
   | Var (x : string)
   | Add (e1 e2 : Exp).
   
@@ -52,16 +55,6 @@ Inductive Exp : Set :=
 Inductive Stm : Set :=
   | Expr (e : Exp)
   | Let (x : string) (e : Exp) (body:Stm).
-  
-  
-Definition value := nat.
-Definition eval_store := listmap.abstract_map value.
- 
-  
-  
-  
-  
-  
   
 (* I use big step semantics because it is closer to the interpreter i already have. 
 The disadvantage of big step semantics is that it doesn't give a semantics to non-terminating programs. 
@@ -84,7 +77,7 @@ Inductive evalStm :  Stm -> eval_store -> (option value * eval_store)->Prop :=
   | EvalLetSucces  : forall x e body store store' result v, evalExp e store (Some v) -> evalStm body (listmap.insert x v store) (result,store')-> evalStm (Let x e body) store (result, listmap.delete x store') .
   
   
-End ProgrammingLanguage.
+End PL.
   
   
 
@@ -96,6 +89,7 @@ End ProgrammingLanguage.
 
 
 Module PhoasProp.
+Require Export ExtLib.Structures.Monads.
 
 Inductive Relop : Set :=
   | Equal
@@ -109,18 +103,58 @@ Inductive prop (A : Set) : Set :=
   | T
   | F
   | Cmp (r:Relop) (a : A) (b:A)
-  | Implies (l : phoasProp A) (r : phoasProp A)
-  | And (l : phoasProp A) (r : phoasProp A)
-  | Or (l : phoasProp A) (r : phoasProp A)
-  | Forall (f : A ->  phoasProp A).
+  | Implies (l : prop A) (r : prop A)
+  | And (l : prop A) (r : prop A)
+  | Or (l : prop A) (r : prop A)
+  | Forall (f : A ->  prop A).
+  
+  
+  
+  
   
   Class ValueAlgebra (V: Set) :=
   {
-  lit : ProgrammingLanguage.value -> V;
-  add : V -> V -> V;
+  lit : PL.value -> V;
+  add : V -> V -> V
+  }.
   
   
+  Instance value_valueAlgebra : ValueAlgebra Z :=
+  {
+  lit := id;
+  add := Z.add
+  
+  }.
+  
+  Instance expression_valueAlgebra : ValueAlgebra PL.Exp :=
+  {
+  lit := PL.Lit;
+  add := PL.Add
+  
+  }.
+  
+  Definition Reader (R A : Set) : Set := R->A.
+  Definition IntReader (R : Set) : Set := Reader Z R.
+  
+  (*Class Monad (M : Set->Set) : Set:=
+  {
+  ret  : forall {A : Set}, A -> M A;
+  bind : forall {A B}, M A -> (A -> M B) -> M B
+  }.*)
+  
+  Instance intreader (A:Set) : Monad (IntReader A) :=
+  {
+  ret x = ().
   }
+
+  Instance reader_valueAlgebra : ValueAlgebra (Z -> PL.Exp) :=
+  {
+  lit := PL.Lit;
+  add := PL.Add
+  }.
+  
+  
+  
   
 End PhoasProp.
 
