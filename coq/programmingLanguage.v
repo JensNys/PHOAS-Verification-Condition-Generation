@@ -26,8 +26,10 @@ Fixpoint lookup (A : Set) (k : string) (store : abstract_map A) : option A :=
         | (k',v) :: rest => if ( String.eqb k k') then Some v else lookup k rest
   end.
 
-Fixpoint insert (A : Set) (k : string) (v : A) (store : abstract_map A) : abstract_map A :=
+Definition insert (A : Set) (k : string) (v : A) (store : abstract_map A) : abstract_map A :=
   (k,v) :: store.
+  Definition singleton (A : Set) (k : string) (v : A)  : abstract_map A :=
+  (k,v) :: nil.
   
 Fixpoint delete (A : Set) (k : string)  (store : abstract_map A) : abstract_map A :=
   match store with
@@ -163,8 +165,8 @@ Inductive prop (A : Set) : Set :=
   }.
   
   Inductive Contract (V:Set) := 
-     | CForall (f: V -> Contract V)
-     | HoareTriple (pre : prop V) (program : PL.Prog) (post : PL.value -> prop V).
+     | ForallC (f: V -> Contract V)
+     | HoareTriple (pre : prop V) (program : PL.Prog) (arg:V) (post :V -> prop V).
 End Phoas.
 
 
@@ -175,17 +177,21 @@ Section constraintGeneration.
   Definition bind (V A B:Set) (c : Wstore V A) (k : A->Wstore V B) : Wstore V B :=
   fun post store1 => c (fun a store2 => (k a) post store2) store1.
   
-  Definition lookupWstore (V : Set) (VA : Phoas.ValueAlgebra V) (varname : string) : Wstore V V :=
+  Definition lookupWstore (V : Set)  (varname : string) : Wstore V V :=
   fun post store => match (listmap.lookup varname store) with 
                         | None => Phoas.F V
                         | Some value => post value store
                     end.
+  Definition insertWstore (V : Set)  (varname : string) (v:V) : Wstore V unit  :=
+  fun post store => post tt (listmap.insert varname v store).
+  Definition deleteWstore (V : Set)  (varname : string) : Wstore V unit  :=
+  fun post store => post tt (listmap.delete varname store).
   
   
   Fixpoint exec_exp (V:Set) (VA : Phoas.ValueAlgebra V) (e : PL.Exp) : (Wstore V V):= 
   match e with
   | PL.Lit n => ret (VA.(Phoas.lit) n)
-  | PL.Var x => lookupWstore VA x
+  | PL.Var x => lookupWstore x
   | PL.Add e1 e2 => bind (exec_exp VA e1)  (fun x =>
                     bind (exec_exp VA e2)  (fun y =>
                     ret (VA.(Phoas.add) x y)
@@ -194,9 +200,32 @@ Section constraintGeneration.
   end.
   
   
+  Fixpoint exec_stm (V:Set) (VA : Phoas.ValueAlgebra V) (stm : PL.Stm) : (Wstore V V):= 
+  match stm with
+  | PL.Expr e => exec_exp VA e
+  | PL.Let var e body => bind (exec_exp VA e)      (fun  x =>
+                         bind (insertWstore var x) (fun _ =>
+                         bind (exec_stm VA body)      (fun result =>
+                         bind (deleteWstore var)   (fun _ =>
+                         ret result
+                         
+                         ))))
+  end.
+  
+  Definition wp (V:Set) (VA : Phoas.ValueAlgebra V) (stm : PL.Stm) (post : V -> listmap.abstract_map V -> Phoas.prop V)  (initStore : listmap.abstract_map V) : Phoas.prop V :=
+  (exec_stm VA stm) post initStore.
+  
+  Fixpoint vc (V:Set) (VA : Phoas.ValueAlgebra V) (contract : Phoas.Contract V) : Phoas.prop V :=
+  match contract with
+    | Phoas.ForallC f => Phoas.Forall (fun v => vc VA (f v))
+    | Phoas.HoareTriple pre prog arg post =>
+      match prog with 
+        | PL.Fun functionName param body => (Phoas.Implies (pre) (wp VA body (fun result _ => post result ) (listmap.singleton param arg)))
+      end
+  end.
   
   
-
+  
 
 
 
