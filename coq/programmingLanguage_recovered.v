@@ -184,17 +184,10 @@ Section constraintGeneration.
   
   Fixpoint exec_exp (V:Set) (VA : Phoas.ValueAlgebra V) (e : PL.Exp) : (Wstore V V):= 
   match e with
-  | PL.Lit n => ret (VA.(Phoas.lit) n)
-  | PL.Var x => lookupWstore VA x
-  | PL.Add e1 e2 => bind (exec_exp VA e1)  (fun x =>
-                    bind (exec_exp VA e2)  (fun y =>
-                    ret (VA.(Phoas.add) x y)
-  
-  ))
+  | Lit n => ret (VA.lit n)
+  | Var x => lookupWstore x
+  | Add e1 e2 => bind exec_exp s1  
   end.
-  
-  
-  
   
 
 
