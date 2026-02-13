@@ -4,8 +4,12 @@ From Coq Require Import
   Relations.Relation_Definitions
   ZArith.BinInt.
 
-
-Require Import Strings.String.
+Require Import Coq.Strings.HexString.
+Require Import Coq.ZArith.BinInt.
+Require Import Coq.ZArith.ZArith.
+Require Import Coq.Strings.String.
+Require Import Coq.Numbers.DecimalString.
+Require Import Coq.Numbers.DecimalZ.
 Require Import stdpp.gmap.
 From stdpp Require Import options.
 
@@ -145,13 +149,6 @@ End Foas.
 
 Module Phoas.
 
-Inductive Relop : Set :=
-  | Equal
-  | GreaterThan
-  | SmallerThan
-  | GreaterThanEqual
-  | SmallerThanEqual.
-  
 
 Inductive prop (A : Set) : Set :=
   | T
@@ -201,7 +198,7 @@ Inductive prop (A : Set) : Set :=
   fun r => k (m r) r.
   Definition ask :(IntReader Z) := fun i => i.
   
-  Definition local (A B:Set) (g: A->A) (f : IntReader A): (IntReader A) := fun i => g (f i).
+  Definition local (A B :Set) (g: B->B) (f : Reader B A): (Reader B A) := fun i => f (g i).
   
   
   
@@ -218,10 +215,10 @@ Inductive prop (A : Set) : Set :=
      | ForallC (f: V -> Contract V)
      | HoareTriple (pre : prop V) (program : PL.Prog) (arg:V) (post :V -> prop V).
      
-     Search Z.
+     Search (Z->string).
      
      
-     
+     Check local.
      
    Fixpoint phoas_to_foas_reader (r : Phoas.prop (IntReader PL.Exp)) : IntReader Foas.prop :=
    match r with
@@ -242,14 +239,17 @@ Inductive prop (A : Set) : Set :=
                       bind (phoas_to_foas_reader r) (fun r2 =>
                       ret (Foas.Or r1 r2)))
     | Forall f => bind ask (fun i => 
-                  bind (local (fun i=>i+1) (phoas_to_foas_reader (f (ret (PL.Var arg))) ) ) (fun body =>
+                  bind (local (fun i=>Z.add i 1) (phoas_to_foas_reader (f (ret (PL.Var ("x" ++ (of_Z i))))) ) ) (fun body =>
                   
                   
                   
-                  (ret (Foas.Forall ("x" ++ (showZ i)) body))))
+                  (ret (Foas.Forall ("x" ++ (of_Z i)) body))))
     
    
    end.
+   Search (nat->Z).
+   Fixpoint phoas_to_foas (phoasProp : Phoas.prop (IntReader PL.Exp)) : Foas.prop :=
+   (phoas_to_foas_reader phoasProp) (Z.of_nat 0).
    
    
    
