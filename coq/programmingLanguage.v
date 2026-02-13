@@ -45,9 +45,6 @@ End listmap.
 (*important! gmap should be replaced with List (K * V) with lookup, add and remove in their interface for the semantics to remain right.*)
 
 Module PL.
-
-
-
 Definition value := Z.
 Definition eval_store := listmap.abstract_map value.
 Inductive Exp : Set :=
@@ -66,8 +63,6 @@ Inductive Prog : Set :=
 The disadvantage of big step semantics is that it doesn't give a semantics to non-terminating programs. 
 Since a contract and it postcondition makes a statement about terminating programs (If a program terminates with result r, {P} program {r.Q} holds). angelic/demonic choice determines whether a contract holds for non-terminating programs by either making the weakest precondition true or false.
 therefore in our case i don't think we have a need for a small-step semantics. *)
-
-
 
 (* big step semantics for expressions*)
 Inductive evalExp :  Exp -> eval_store -> option value->Prop :=
@@ -93,9 +88,62 @@ End PL.
 
 (*------------------------------------------------------*)
 
+Inductive Relop : Set :=
+  | Equal
+  | GreaterThan
+  | SmallerThan
+  | GreaterThanEqual
+  | SmallerThanEqual.
+
+
+
+Module Foas.
+
+Inductive prop : Set :=
+  | T
+  | F
+  | Cmp (r:Relop) (a : PL.Exp) (b:PL.Exp)
+  | Implies (l : prop) (r : prop)
+  | And (l : prop) (r : prop)
+  | Or (l : prop) (r : prop)
+  | Forall (var:string ) (p :  prop).
+  
+  
+  Inductive Contract := 
+     | MkContract (forallVar : string) (pre : prop) (prog : PL.Prog) (arg : string) (result: string) (post : prop).
+     
+     
+(*
+Fixpoint string_to_Prop (var :string) : Prop :=
+  forall var, (Z.add var 1 = Z.of_nat 3).
+
+Inductive mini : Set :=
+  | miniCmp (a : string) 
+  | miniForall (var:string ) (p :  mini).
+  Fixpoint mini_to_Prop (m:mini) : Prop:=
+  match m with
+    |miniCmp a => (Z.add a 1 =  Z.of_nat 3)
+    |miniForall var p => forall var, mini_to_Prop p
+  end.
+Check string_to_prop "x".
+  Lemma naam:string_to_prop "x".
+
+
+  Fixpoint propToProp (p : prop) : Prop :=
+  match prop with
+    | T => True
+    | F => False
+    | Cmp r l r => 
+    | Implies l r => 
+    | And l r =>
+    | Or l r =>
+    | Forall (var:string ) (p :  prop).
+    *)
+  
+  
+End Foas.
 
 Module Phoas.
-Require Export ExtLib.Structures.Monads.
 
 Inductive Relop : Set :=
   | Equal
@@ -151,7 +199,9 @@ Inductive prop (A : Set) : Set :=
   Definition ret (A:Set) (a:A) : IntReader A := fun i => a.
   Definition bind (A B:Set) (m : IntReader A) (k : A->IntReader B) : IntReader B :=
   fun r => k (m r) r.
+  Definition ask :(IntReader Z) := fun i => i.
   
+  Definition local (A B:Set) (g: A->A) (f : IntReader A): (IntReader A) := fun i => g (f i).
   
   
   
@@ -167,7 +217,51 @@ Inductive prop (A : Set) : Set :=
   Inductive Contract (V:Set) := 
      | ForallC (f: V -> Contract V)
      | HoareTriple (pre : prop V) (program : PL.Prog) (arg:V) (post :V -> prop V).
+     
+     Search Z.
+     
+     
+     
+     
+   Fixpoint phoas_to_foas_reader (r : Phoas.prop (IntReader PL.Exp)) : IntReader Foas.prop :=
+   match r with
+    | T _ => ret Foas.T
+    | F _=> ret Foas.F
+    | Cmp op l r => bind l (fun v1  => 
+                    bind r (fun v2 =>
+                    ret (Foas.Cmp op v1 v2)))
+    | Implies p1 p2 =>bind (phoas_to_foas_reader p1) (fun r1 =>
+                      bind (phoas_to_foas_reader p2) (fun r2 =>
+                      ret (Foas.Implies r1 r2)))
+    
+    
+    | And l r =>bind (phoas_to_foas_reader l) (fun r1 =>
+                      bind (phoas_to_foas_reader r) (fun r2 =>
+                      ret (Foas.And r1 r2)))
+    | Or l r =>bind (phoas_to_foas_reader l) (fun r1 =>
+                      bind (phoas_to_foas_reader r) (fun r2 =>
+                      ret (Foas.Or r1 r2)))
+    | Forall f => bind ask (fun i => 
+                  bind (local (fun i=>i+1) (phoas_to_foas_reader (f (ret (PL.Var arg))) ) ) (fun body =>
+                  
+                  
+                  
+                  (ret (Foas.Forall ("x" ++ (showZ i)) body))))
+    
+   
+   end.
+   
+   
+   
+   
+   
 End Phoas.
+
+
+
+
+
+
 
 
 Section constraintGeneration.
@@ -226,9 +320,6 @@ Section constraintGeneration.
   
   
   
-
-
-
 
 
 End constraintGeneration.
