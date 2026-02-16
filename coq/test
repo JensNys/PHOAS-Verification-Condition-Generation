@@ -1,0 +1,4 @@
+Require Import Coq.Strings.HexString.
+Require Import Coq.ZArith.BinInt.
+
+Compute (of_Z 255). (* = "0xff" : string *)

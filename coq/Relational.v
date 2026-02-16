@@ -285,9 +285,11 @@ Module Exps.
     - apply HrelatedMaps. 
 (* Lemma rMonad: forall (A1 B1 A2 B2: Set) (Ra : Related A1 A2) (Rb : Related B1 B2) (a1 : option A1) (a2 :option  A2) (lam1: (A1->option B1) ) (lam2:(A2->option B2)), liftRelationOption Ra a1 a2 -> Rbind Ra Rb lam1 lam2 -> liftRelationOption Rb (bind a1 lam1) (bind a2 lam2).*)
     - eapply rMonad; try(apply IHe1).
+     unfold Rbind.
+      unfold "==>".
       intros.
       
-      eapply rMonad;try(apply IHe2).
+       eapply rMonad; try(apply IHe2).
       unfold Rbind.
       unfold "==>".
       intros.

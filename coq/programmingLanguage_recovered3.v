@@ -50,8 +50,8 @@ End listmap.
 
 Module PL.
 Definition value := Z.
-(*Definition eval_store := listmap.abstract_map value.*)
-Inductive Exp  : Set :=
+Definition eval_store := listmap.abstract_map value.
+Inductive Exp : Set :=
   | Lit (n : value)
   | Var (x : string)
   | Add (e1 e2 : Exp).
@@ -63,44 +63,23 @@ Inductive Stm : Set :=
 Inductive Prog : Set :=
   | Fun (functionName : string) (param : string) (body : Stm).
   
-  Class ValueAlgebra (V: Set) :=
-  {
-  lit : PL.value -> V;
-  add : V -> V -> V
-  }.
-  
-  
-  Instance value_valueAlgebra : ValueAlgebra Z :=
-  {
-  lit := id;
-  add := Z.add
-  
-  }.
-  
-  Instance expression_valueAlgebra : ValueAlgebra PL.Exp :=
-  {
-  lit := PL.Lit;
-  add := PL.Add
-  
-  }.
-  
 (* I use big step semantics because it is closer to the interpreter i already have. 
 The disadvantage of big step semantics is that it doesn't give a semantics to non-terminating programs. 
 Since a contract and it postcondition makes a statement about terminating programs (If a program terminates with result r, {P} program {r.Q} holds). angelic/demonic choice determines whether a contract holds for non-terminating programs by either making the weakest precondition true or false.
 therefore in our case i don't think we have a need for a small-step semantics. *)
 
 (* big step semantics for expressions*)
-Inductive evalExp (V : Set) (VA: ValueAlgebra V) :  Exp -> listmap.abstract_map V -> option V->Prop :=
-  | EvalLit : forall n store, evalExp VA (Lit n) store (Some (lit n))
-  | EvalVar : forall x store, evalExp VA (Var x) store (listmap.lookup x store)
-  | EvalAddLeftFail : forall store a b, evalExp VA a store None -> evalExp VA (Add a b) store None
-  | EvalAddRightFail : forall store a b, evalExp VA b store None -> evalExp VA (Add a b) store None
-  | EvalAdd : forall store a b, evalExp VA b store None -> evalExp VA (Add a b) store None.
+Inductive evalExp :  Exp -> eval_store -> option value->Prop :=
+  | EvalLit : forall n store, evalExp (Lit n) store (Some n)
+  | EvalVar : forall x store, evalExp (Var x) store (listmap.lookup x store)
+  | EvalAddLeftFail : forall store a b, evalExp a store None -> evalExp (Add a b) store None
+  | EvalAddRightFail : forall store a b, evalExp b store None -> evalExp (Add a b) store None
+  | EvalAdd : forall store a b, evalExp b store None -> evalExp (Add a b) store None.
   
 (*big step semantics for statements*)
-Inductive evalStm (V:Set) (VA:ValueAlgebra V) :  Stm -> listmap.abstract_map V -> (option V * listmap.abstract_map V)->Prop :=
-  | EvalExpr : forall mv e store, evalExp VA e store mv -> evalStm VA (Expr e) store (mv,store)
-  | EvalLetSucces  : forall x e body store store' result v, evalExp VA e store (Some v) -> evalStm VA  body (listmap.insert x v store) (result,store')-> evalStm VA (Let x e body) store (result, listmap.delete x store') .
+Inductive evalStm :  Stm -> eval_store -> (option value * eval_store)->Prop :=
+  | EvalExpr : forall mv e store, evalExp e store mv -> evalStm (Expr e) store (mv,store)
+  | EvalLetSucces  : forall x e body store store' result v, evalExp e store (Some v) -> evalStm body (listmap.insert x v store) (result,store')-> evalStm (Let x e body) store (result, listmap.delete x store') .
   
   
 End PL.
@@ -184,7 +163,26 @@ Inductive prop (A : Set) : Set :=
   
   
   
+  Class ValueAlgebra (V: Set) :=
+  {
+  lit : PL.value -> V;
+  add : V -> V -> V
+  }.
   
+  
+  Instance value_valueAlgebra : ValueAlgebra Z :=
+  {
+  lit := id;
+  add := Z.add
+  
+  }.
+  
+  Instance expression_valueAlgebra : ValueAlgebra PL.Exp :=
+  {
+  lit := PL.Lit;
+  add := PL.Add
+  
+  }.
   
   Definition Reader (R A : Set) : Set := R->A.
   Definition IntReader (A : Set) : Set := Reader Z A.
@@ -205,7 +203,7 @@ Inductive prop (A : Set) : Set :=
   
   
 
-  Instance reader_valueAlgebra : PL.ValueAlgebra (Z -> PL.Exp) :=
+  Instance reader_valueAlgebra : ValueAlgebra (Z -> PL.Exp) :=
   {
   lit i:= ret (PL.Lit i);
   add x y := bind x (fun v1 => 
@@ -249,9 +247,6 @@ Inductive prop (A : Set) : Set :=
     
    
    end.
-   Search (nat->Z).
-   Fixpoint phoas_to_foas (phoasProp : Phoas.prop (IntReader PL.Exp)) : Foas.prop :=
-   (phoas_to_foas_reader phoasProp) (Z.of_nat 0).
    
    
    
@@ -321,40 +316,10 @@ Section constraintGeneration.
   end.
   
   
-  Lemma semantp (V:Set) (p : Phoas.prop V) : Prop.
-  Admitted.
   
-  Definition satisfies_post_angelic (V:Set) (post: V->listmap.abstract_map V->Phoas.prop V)(o : (option V * listmap.abstract_map V)) : Phoas.prop V :=
-  match o with
-    |(opt,m) => (match opt with 
-                    |None => Phoas.T _
-                    |Some v => post v m
-                end)
-  end.
-
-  
-  Lemma wpSound : forall (V:Set) (VA:Phoas.ValueAlgebra V) (post : V->listmap.abstract_map V->Phoas.prop V) (stm : PL.Stm) (initStore :  listmap.abstract_map V) r, semantp (wp VA stm post initStore) -> PL.evalStm stm initStore r-> semantp (satisfies_post_angelic post r).
-  
-  (post : PL.value -> Phoas.prop PL.value) (stm : PL.Stm) (initStore : list_map.abstract_map PL.value) ()
-
-
-
-
-
-
-
-
 
 
 End constraintGeneration.
-
-
-
-
-
-
-
-
 
 
 
