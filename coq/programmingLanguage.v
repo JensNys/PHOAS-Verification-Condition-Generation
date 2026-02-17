@@ -284,19 +284,19 @@ Section constraintGeneration.
   fun post store => post tt (listmap.delete varname store).
   
   
-  Fixpoint exec_exp (V:Set) (VA : Phoas.ValueAlgebra V) (e : PL.Exp) : (Wstore V V):= 
+  Fixpoint exec_exp (V:Set) (VA : PL.ValueAlgebra V) (e : PL.Exp) : (Wstore V V):= 
   match e with
-  | PL.Lit n => ret (VA.(Phoas.lit) n)
+  | PL.Lit n => ret (VA.(PL.lit) n)
   | PL.Var x => lookupWstore x
   | PL.Add e1 e2 => bind (exec_exp VA e1)  (fun x =>
                     bind (exec_exp VA e2)  (fun y =>
-                    ret (VA.(Phoas.add) x y)
+                    ret (VA.(PL.add) x y)
   
   ))
   end.
   
   
-  Fixpoint exec_stm (V:Set) (VA : Phoas.ValueAlgebra V) (stm : PL.Stm) : (Wstore V V):= 
+  Fixpoint exec_stm (V:Set) (VA : PL.ValueAlgebra V) (stm : PL.Stm) : (Wstore V V):= 
   match stm with
   | PL.Expr e => exec_exp VA e
   | PL.Let var e body => bind (exec_exp VA e)      (fun  x =>
@@ -308,21 +308,32 @@ Section constraintGeneration.
                          ))))
   end.
   
-  Definition wp (V:Set) (VA : Phoas.ValueAlgebra V) (stm : PL.Stm) (post : V -> listmap.abstract_map V -> Phoas.prop V)  (initStore : listmap.abstract_map V) : Phoas.prop V :=
+  Definition wp (V:Set) (VA : PL.ValueAlgebra V) (stm : PL.Stm) (post : V -> listmap.abstract_map V -> Phoas.prop V)  (initStore : listmap.abstract_map V) : Phoas.prop V :=
   (exec_stm VA stm) post initStore.
   
-  Fixpoint vc (V:Set) (VA : Phoas.ValueAlgebra V) (contract : Phoas.Contract V) : Phoas.prop V :=
+  
+  Definition weaken (V:Set) (post : V->Phoas.prop V) : V->listmap.abstract_map V->Phoas.prop V :=
+  fun result _ => post result.
+  
+  Fixpoint vc (V:Set) (VA : PL.ValueAlgebra V) (contract : Phoas.Contract V) : Phoas.prop V :=
   match contract with
     | Phoas.ForallC f => Phoas.Forall (fun v => vc VA (f v))
     | Phoas.HoareTriple pre prog arg post =>
       match prog with 
-        | PL.Fun functionName param body => (Phoas.Implies (pre) (wp VA body (fun result _ => post result ) (listmap.singleton param arg)))
+        | PL.Fun functionName param body => (Phoas.Implies (pre) (wp VA body (weaken post) (listmap.singleton param arg)))
       end
   end.
   
   
   Lemma semantp (V:Set) (p : Phoas.prop V) : Prop.
   Admitted.
+  
+  Lemma semantImplies : forall (V:Set) (p q : Phoas.prop V), semantp (Phoas.Implies p q) -> semantp p -> semantp q. Admitted. 
+  
+  
+  
+  (*this definition throws away the v, while p can depend on v.*)
+  Lemma semantForall : forall (V:Set) (p : Phoas.prop V) (f: V-> Phoas.prop V), f =(fun v=>p) -> semantp (Phoas.Forall f) -> forall v', semantp (f v'). Admitted. 
   
   Definition satisfies_post_angelic (V:Set) (post: V->listmap.abstract_map V->Phoas.prop V)(o : (option V * listmap.abstract_map V)) : Phoas.prop V :=
   match o with
@@ -332,8 +343,82 @@ Section constraintGeneration.
                 end)
   end.
 
+  (*(*wp generates a precondition*)
+  Lemma wpPrecondition : forall (V:Set) (VA:PL.ValueAlgebra V) (post : V->listmap.abstract_map V->Phoas.prop V) (stm : PL.Stm) (initStore :  listmap.abstract_map V) r, 
   
-  Lemma wpSound : forall (V:Set) (VA:Phoas.ValueAlgebra V) (post : V->listmap.abstract_map V->Phoas.prop V) (stm : PL.Stm) (initStore :  listmap.abstract_map V) r, semantp (wp VA stm post initStore) -> PL.evalStm stm initStore r-> semantp (satisfies_post_angelic post r).
+  semantp (wp VA stm post initStore) -> PL.evalStm VA stm initStore r -> semantp (satisfies_post_angelic post r). Admitted.
+  *)
+  
+  
+  (*wp generates the weakest precondition*)
+  Lemma wpWeakest : forall (V:Set) (VA:PL.ValueAlgebra V) (post : V->listmap.abstract_map V->Phoas.prop V) (stm : PL.Stm) (pre : Phoas.prop V) (initStore :  listmap.abstract_map V) r,       
+  
+  ((semantp pre) -> PL.evalStm VA stm initStore r-> semantp (satisfies_post_angelic post r)) (*if pre is a precondition*)
+  ->
+  (semantp pre -> semantp (wp VA stm post initStore) ). Admitted. (*pre implies the weakest precondition *)
+  
+  Lemma wpPrecondition : forall (V:Set) (VA:PL.ValueAlgebra V) (post : V->listmap.abstract_map V->Phoas.prop V) (stm : PL.Stm) (pre : Phoas.prop V) (initStore :  listmap.abstract_map V) result,       
+  
+  (semantp pre -> semantp (wp VA stm post initStore) )
+  ->
+  ((semantp pre) -> PL.evalStm VA stm initStore result-> semantp (satisfies_post_angelic post result)).  Admitted.
+  
+  Lemma wpCorrect  : forall (V:Set) (VA:PL.ValueAlgebra V) (post : V->listmap.abstract_map V->Phoas.prop V) (stm : PL.Stm) (pre : Phoas.prop V) (initStore :  listmap.abstract_map V) result,       
+  
+  (semantp pre -> semantp (wp VA stm post initStore) )
+  <->
+  ((semantp pre) -> PL.evalStm VA stm initStore result-> semantp (satisfies_post_angelic post result)).  
+  Proof.
+  intros. split.
+  - eapply wpPrecondition.
+  - eapply wpWeakest.
+  Qed.
+  
+  
+  Lemma vcGenSound : forall (V:Set) (VA:PL.ValueAlgebra V) (pre : Phoas.prop V) (post : V->Phoas.prop V) (stm : PL.Stm) (contract : Phoas.Contract V) (v:V) funcName var result, contract = Phoas.ForallC (fun v =>Phoas.HoareTriple pre (PL.Fun funcName var stm) v post) -> 
+  semantp (vc VA contract) -> PL.evalStm VA stm (listmap.singleton var v) result-> semantp (satisfies_post_angelic (weaken post) result).
+  
+  Proof.
+  intros.
+  unfold vc in H0.
+  rewrite H in  H0.
+  eapply semantForall in H0.
+  - eapply semantImplies  in H0.
+   +  Check wpWeakest.
+      Check wpPrecondition.
+   eapply wpPrecondition.
+    *  intros. eapply wpWeakest; eauto.
+    * eapply wpPrecondition;eauto.
+    * apply H1.
+   
+   + admit.
+   - admit.
+   Admitted. 
+     
+    (*
+  admit.
+  - 
+  
+  apply (semantForall (Phoas.Implies pre
+            (wp VA stm (weaken post)
+               (listmap.singleton var v))) ((fun v => V,
+          Phoas.Implies pre
+            (wp VA stm (weaken post)
+               (listmap.singleton var v))))) in H0. 
+               
+               
+               
+  eapply (semantImplies pre (wp VA stm (weaken post) (listmap.singleton var v0))) in H0.
+  
+  
+  
+  simplify.
+  
+  eauto.  
+  
+  
+  
+  
   
   (post : PL.value -> Phoas.prop PL.value) (stm : PL.Stm) (initStore : list_map.abstract_map PL.value) ()
 
@@ -342,7 +427,7 @@ Section constraintGeneration.
 
 
 
-
+*)
 
 
 
