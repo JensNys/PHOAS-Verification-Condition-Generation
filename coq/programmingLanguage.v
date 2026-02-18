@@ -374,9 +374,12 @@ Section constraintGeneration.
   - eapply wpWeakest.
   Qed.
   
-  
-  Lemma vcGenSound : forall (V:Set) (VA:PL.ValueAlgebra V) (pre : Phoas.prop V) (post : V->Phoas.prop V) (stm : PL.Stm) (contract : Phoas.Contract V) (v:V) funcName var result, contract = Phoas.ForallC (fun v =>Phoas.HoareTriple pre (PL.Fun funcName var stm) v post) -> 
-  semantp (vc VA contract) -> PL.evalStm VA stm (listmap.singleton var v) result-> semantp (satisfies_post_angelic (weaken post) result).
+
+   
+   
+   
+   Lemma vcGenSound : forall (V:Set) (VA:PL.ValueAlgebra V) (pre : V->Phoas.prop V) (post : V->V->Phoas.prop V) (stm : PL.Stm) (contract : Phoas.Contract V) (v:V) funcName var result, contract = Phoas.ForallC (fun v' =>Phoas.HoareTriple (pre v') (PL.Fun funcName var stm) v' (post v')) -> 
+  semantp (vc VA contract) -> semantp (pre v) ->PL.evalStm VA stm (listmap.singleton var v) result-> semantp (satisfies_post_angelic (weaken (post v)) result).
   
   Proof.
   intros.
@@ -389,11 +392,20 @@ Section constraintGeneration.
    eapply wpPrecondition.
     *  intros. eapply wpWeakest; eauto.
     * eapply wpPrecondition;eauto.
-    * apply H1.
+    * apply H2.
    
    + admit.
    - admit.
    Admitted. 
+   
+   
+   
+   
+   
+   
+   
+   
+   
      
     (*
   admit.
