@@ -34,6 +34,8 @@ Definition insert (A : Set) (k : string) (v : A) (store : abstract_map A) : abst
   (k,v) :: store.
   Definition singleton (A : Set) (k : string) (v : A)  : abstract_map A :=
   (k,v) :: nil.
+  Definition double (A : Set) (k1 : string) (v1 : A) (k2 : string) (v2 : A)  : abstract_map A :=
+  (k2,v2) :: (k1,v1) :: nil.
   
 Fixpoint delete (A : Set) (k : string)  (store : abstract_map A) : abstract_map A :=
   match store with
@@ -90,17 +92,15 @@ Since a contract and it postcondition makes a statement about terminating progra
 therefore in our case i don't think we have a need for a small-step semantics. *)
 
 (* big step semantics for expressions*)
-Inductive evalExp (V : Set) (VA: ValueAlgebra V) :  Exp -> listmap.abstract_map V -> option V->Prop :=
-  | EvalLit : forall n store, evalExp VA (Lit n) store (Some (lit n))
-  | EvalVar : forall x store, evalExp VA (Var x) store (listmap.lookup x store)
-  | EvalAddLeftFail : forall store a b, evalExp VA a store None -> evalExp VA (Add a b) store None
-  | EvalAddRightFail : forall store a b, evalExp VA b store None -> evalExp VA (Add a b) store None
-  | EvalAdd : forall store a b, evalExp VA b store None -> evalExp VA (Add a b) store None.
+Inductive evalExp (V : Set) (VA: ValueAlgebra V) :  Exp -> listmap.abstract_map V -> V->Prop :=
+  | EvalLit : forall n store, evalExp VA (Lit n) store ( (lit n))
+  | EvalVar : forall x store v,  listmap.lookup x store = Some v -> evalExp VA (Var x) store v
+  | EvalAdd : forall store a b v1 v2, evalExp VA a store v1 -> evalExp VA b store v2 -> evalExp VA (Add a b) store (add v1 v2).
   
 (*big step semantics for statements*)
-Inductive evalStm (V:Set) (VA:ValueAlgebra V) :  Stm -> listmap.abstract_map V -> (option V * listmap.abstract_map V)->Prop :=
+Inductive evalStm (V:Set) (VA:ValueAlgebra V) :  Stm -> listmap.abstract_map V -> (V * listmap.abstract_map V)->Prop :=
   | EvalExpr : forall mv e store, evalExp VA e store mv -> evalStm VA (Expr e) store (mv,store)
-  | EvalLetSucces  : forall x e body store store' result v, evalExp VA e store (Some v) -> evalStm VA  body (listmap.insert x v store) (result,store')-> evalStm VA (Let x e body) store (result, listmap.delete x store') .
+  | EvalLetSucces  : forall x e body store store' result v, evalExp VA e store (v) -> evalStm VA  body (listmap.insert x v store) (result,store')-> evalStm VA (Let x e body) store (result, listmap.delete x store') .
   
   
 End PL.
@@ -222,6 +222,13 @@ Inductive prop (A : Set) : Set :=
      
      Check local.
      
+     Fixpoint foas_to_phoas (V:Set) (env : listmap.abstract_map V) (foasprop : Foas.prop) : prop V . Admitted.
+     
+     Fixpoint foas_contract_to_phoas_contract (V : Set) (env : listmap.abstract_map V) (foas_contract : Foas.Contract) : Contract V :=
+     match foas_contract with
+      | Foas.MkContract forallVar pre prog  arg result post => ForallC (fun v => HoareTriple (foas_to_phoas (listmap.singleton forallVar v) pre) prog v (fun r => foas_to_phoas (listmap.double forallVar v result r) post) )
+     end .
+     
    Fixpoint phoas_to_foas_reader (r : Phoas.prop (IntReader PL.Exp)) : IntReader Foas.prop :=
    match r with
     | T _ => ret Foas.T
@@ -335,13 +342,13 @@ Section constraintGeneration.
   (*this definition throws away the v, while p can depend on v.*)
   Lemma semantForall : forall (V:Set) (p : Phoas.prop V) (f: V-> Phoas.prop V), f =(fun v=>p) -> semantp (Phoas.Forall f) -> forall v', semantp (f v'). Admitted. 
   
-  Definition satisfies_post_angelic (V:Set) (post: V->listmap.abstract_map V->Phoas.prop V)(o : (option V * listmap.abstract_map V)) : Phoas.prop V :=
-  match o with
-    |(opt,m) => (match opt with 
-                    |None => Phoas.T _
-                    |Some v => post v m
-                end)
+  Definition satisfies_post_angelic (V:Set) (post: V->listmap.abstract_map V->Phoas.prop V)(t : (V * listmap.abstract_map V)) : Phoas.prop V :=
+  match t with 
+  | (v,s) => post v s
   end.
+  
+ 
+  
 
   (*(*wp generates a precondition*)
   Lemma wpPrecondition : forall (V:Set) (VA:PL.ValueAlgebra V) (post : V->listmap.abstract_map V->Phoas.prop V) (stm : PL.Stm) (initStore :  listmap.abstract_map V) r, 
@@ -397,6 +404,12 @@ Section constraintGeneration.
    + admit.
    - admit.
    Admitted. 
+   
+   
+   
+   
+   
+   Lemma adequate (contract : Foas.Contract)
    
    
    
@@ -471,3 +484,25 @@ End constraintGeneration.
 
 
 
+ Admitted.  Admitted.  
+  Proof.
+  intros. split.
+  - eapply wpPrecondition.
+  - eapply wpWeakest.
+  Qed.
+  
+  Proof.
+  intros.
+  unfold vc in H0.
+  rewrite H in  H0.
+  eapply semantForall in H0.
+  - eapply semantImplies  in H0.
+   +  Check wpWeakest.
+      Check wpPrecondition.
+   eapply wpPrecondition.
+    *  intros. eapply wpWeakest; eauto.
+    * eapply wpPrecondition;eauto.
+    * apply H2.
+   
+   + admit.
+   - admit.
