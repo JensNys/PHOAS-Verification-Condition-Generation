@@ -331,6 +331,10 @@ Section constraintGeneration.
       end
   end.
   
+  Fixpoint vc_foas (c : Foas.Contract) : Foas.prop :=
+  
+  
+  Phoas.phoas_to_foas (vc (Phoas.reader_valueAlgebra) (Phoas.foas_contract_to_phoas_contract nil c)).
   
   Lemma semantp (V:Set) (p : Phoas.prop V) : Prop.
   Admitted.
