@@ -19,7 +19,7 @@ Local Open Scope program_scope.
 Set Implicit Arguments.
 
   
-  
+
 
 Module listmap.
 
@@ -28,6 +28,12 @@ Fixpoint lookup (A : Set) (k : string) (store : abstract_map A) : option A :=
   match store with
         | nil => None
         | (k',v) :: rest => if ( String.eqb k k') then Some v else lookup k rest
+  end.
+  
+  Fixpoint contains (A : Set)  (store : abstract_map A) (k : string) :Prop :=
+  match store with
+        | nil => false
+        | (k',v) :: rest => if ( String.eqb k k') then true else contains rest k
   end.
 
 Definition insert (A : Set) (k : string) (v : A) (store : abstract_map A) : abstract_map A :=
@@ -42,6 +48,26 @@ Fixpoint delete (A : Set) (k : string)  (store : abstract_map A) : abstract_map 
         | nil => nil
         | (k',v) :: rest => if ( String.eqb k k') then rest else (k',v) :: (delete k rest)
   end.
+  
+  
+  Search "?=".
+  Lemma contains_implies_lookup_some: forall (A:Set) (store : abstract_map A) k, contains store k -> {v | lookup k store = Some v}.
+  Proof.
+  intros.
+  induction store.
+  - contradiction.
+  - unfold lookup.
+    destruct a.
+    destruct (k =? s)%string eqn:Heq.
+    (*destruct (string_dec k s) as [Heq | Hneq].*)
+   (*Search "forall s, (s ?= s)%string=true".*)
+ 
+    + exists a. reflexivity. (* subst. simpl. apply Z.compare_refl s.*) 
+    + apply IHstore . 
+    
+      unfold contains in H. rewrite Heq in H. simpl in H.  apply H.
+      Qed.
+  
   
 
 
@@ -92,17 +118,45 @@ Since a contract and it postcondition makes a statement about terminating progra
 therefore in our case i don't think we have a need for a small-step semantics. *)
 
 (* big step semantics for expressions*)
-Inductive evalExp (V : Set) (VA: ValueAlgebra V) :  Exp -> listmap.abstract_map V -> V->Prop :=
-  | EvalLit : forall n store, evalExp VA (Lit n) store ( (lit n))
-  | EvalVar : forall x store v,  listmap.lookup x store = Some v -> evalExp VA (Var x) store v
-  | EvalAdd : forall store a b v1 v2, evalExp VA a store v1 -> evalExp VA b store v2 -> evalExp VA (Add a b) store (add v1 v2).
+Inductive evalExp  :  Exp -> listmap.abstract_map value -> value ->Prop :=
+  | EvalLit : forall n store, evalExp (Lit n) store (  n)
+  | EvalVar : forall x store v,  listmap.lookup x store = Some v -> evalExp (Var x) store v
+  | EvalAdd : forall store a b v1 v2, evalExp a store v1 -> evalExp b store v2 -> evalExp (Add a b) store (Z.add v1 v2).
   
 (*big step semantics for statements*)
-Inductive evalStm (V:Set) (VA:ValueAlgebra V) :  Stm -> listmap.abstract_map V -> (V * listmap.abstract_map V)->Prop :=
-  | EvalExpr : forall mv e store, evalExp VA e store mv -> evalStm VA (Expr e) store (mv,store)
-  | EvalLetSucces  : forall x e body store store' result v, evalExp VA e store (v) -> evalStm VA  body (listmap.insert x v store) (result,store')-> evalStm VA (Let x e body) store (result, listmap.delete x store') .
+Inductive evalStm :  Stm -> listmap.abstract_map value -> (value * listmap.abstract_map value)->Prop :=
+  | EvalExpr : forall mv e store, evalExp e store mv -> evalStm  (Expr e) store (mv,store)
+  | EvalLetSucces  : forall x e body store store' result v, evalExp  e store (v) -> evalStm   body (listmap.insert x v store) (result,store')-> evalStm  (Let x e body) store (result, listmap.delete x store') .
   
   
+  Inductive WellScopedExp : listmap.abstract_map value->Exp->Type :=
+  | LitScoped :  forall store n, WellScopedExp store (Lit n)
+  | VarScoped : forall store x, listmap.contains store x-> WellScopedExp store (Var x)
+  |AddScoped : forall store e1 e2, WellScopedExp store e1->WellScopedExp store e2 -> WellScopedExp store (Add e1 e2).
+  Check listmap.contains_implies_lookup_some.
+  Fixpoint interp  (s:listmap.abstract_map value) (e : Exp) (proof : WellScopedExp s e) : value :=
+    match proof with
+      |LitScoped _ n => n
+      
+      |VarScoped s x contains_proof => match (listmap.contains_implies_lookup_some s x contains_proof) with
+                                          | exist _ v H => v
+                                       end
+      | AddScoped  H1 H2=> Z.add (interp H1) (interp H2)
+    end.
+                                           
+    
+    
+      
+  
+  
+  (*match (lookup x s) with
+                  |Some v => v
+                  |None => match proof with 
+                                | VarScoped _ _ contains_proof => 
+                                    (* Use contains_proof to derive a contradiction *)
+                                    False_rect value (contains_implies_lookup_some x s contains_proof)
+                            end
+                  end*)
 End PL.
   
   
@@ -136,6 +190,35 @@ Inductive prop : Set :=
   
   Inductive Contract := 
      | MkContract (forallVar : string) (pre : prop) (prog : PL.Prog) (arg : string) (result: string) (post : prop).
+     Locate "->".
+     
+     
+    (*Fixpoint (r:Relop)*)
+    Check Z.lt.
+    Fixpoint semant_Relop (r:Relop) : PL.value->PL.value->Prop :=
+    match r with
+      |Equal => eq
+      |SmallerThan => Z.lt
+      |GreaterThan => Z.gt
+      |GreaterThanEqual => Z.ge
+      |SmallerThanEqual => Z.le
+    
+    end.
+    
+    (*this states falsely that everything is well_scoped*)
+    Lemma everything_well_scoped : forall s e, PL.WellScopedExp s e.
+    Admitted.
+     
+    Fixpoint semant (s:listmap.abstract_map PL.value) (p : prop)  : Prop :=
+    match p with
+      | T => True
+      | F => False
+      | Implies l r  =>forall _ : (semant s l), (semant s r)
+      | And l r => and  (semant s l) (semant s r)
+      | Or l r => or (semant s l) (semant s r)
+      | Forall var p => forall (v : PL.value), semant (listmap.insert var v s) p
+      | Cmp r a b => (semant_Relop r) (PL.interp (everything_well_scoped s a)) (PL.interp (everything_well_scoped s b)) 
+    end.
      
      
 (*
@@ -351,6 +434,15 @@ Section constraintGeneration.
   | (v,s) => post v s
   end.
   
+  
+  
+  
+  Definition adequate (contract:Foas.contract) : forall  forallVar pre prog arg result post ,  MkContract forallVar pre prog arg result post -> forall inp, .
+   
+  
+  
+  
+  
  
   
 
@@ -413,7 +505,6 @@ Section constraintGeneration.
    
    
    
-   Lemma adequate (contract : Foas.Contract)
    
    
    
