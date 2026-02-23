@@ -188,6 +188,7 @@ Inductive prop : Set :=
   | Forall (var:string ) (p :  prop).
   
   
+  
   Inductive Contract := 
      | MkContract (forallVar : string) (pre : prop) (prog : PL.Prog) (arg : string) (result: string) (post : prop).
      Locate "->".
@@ -436,8 +437,8 @@ Section constraintGeneration.
   
   
   
-  
-  Definition adequate (contract:Foas.contract) : forall  forallVar pre prog arg result post ,  MkContract forallVar pre prog arg result post -> forall inp, .
+  (*when extending to dealing with lists, the argument given to prog refers to the value associated with the values in forallVar. Right now, we ignore arg because we know it must be the string mentioned in forallVar.*)
+  Definition adequate (contract:Foas.Contract) : forall  forallVar pre stm arg resultName post result endStore fName,  contract=Foas.MkContract forallVar pre (PL.Fun fName arg stm ) forallVar resultName post -> forall inp, (Foas.semant (listmap.singleton forallVar inp) pre) -> PL.evalStm stm (listmap.singleton arg inp) (result,endStore) -> Foas.semant (listmap.double forallVar inp resultName result) post.
    
   
   
