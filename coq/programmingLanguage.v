@@ -67,6 +67,21 @@ Fixpoint delete (A : Set) (k : string)  (store : abstract_map A) : abstract_map 
     
       unfold contains in H. rewrite Heq in H. simpl in H.  apply H.
       Qed.
+      
+  Lemma insert_implies_contains : forall (A:Set) (store : abstract_map A) store' key value, store' = insert key value store-> contains store' key.
+  Proof.
+ intros A store store' key value H.
+  (* 1. Replace store' with its definition using the hypothesis H *)
+  subst store'.
+  (* 2. Unfold 'insert' and 'contains' to see the underlying logic *)
+  unfold insert, contains.
+  (* 3. You are left with: (if key =? key then true else contains store key) *)
+  (* The term (key =? key) simplifies to true. *)
+  rewrite String.eqb_refl.
+  (* 4. Now the goal is simply 'true', which in a Prop context means 'Is_true true' *)
+  simpl. 
+  exact I. (* 'I' is the constructor for 'True' *)
+  Qed.
   
   
 
@@ -129,10 +144,13 @@ Inductive evalStm :  Stm -> listmap.abstract_map value -> (value * listmap.abstr
   | EvalLetSucces  : forall x e body store store' result v, evalExp  e store (v) -> evalStm   body (listmap.insert x v store) (result,store')-> evalStm  (Let x e body) store (result, listmap.delete x store') .
   
   
-  Inductive WellScopedExp : listmap.abstract_map value->Exp->Type :=
+  Inductive WellScopedExp (V:Set) : listmap.abstract_map V->Exp->Type :=
   | LitScoped :  forall store n, WellScopedExp store (Lit n)
   | VarScoped : forall store x, listmap.contains store x-> WellScopedExp store (Var x)
   |AddScoped : forall store e1 e2, WellScopedExp store e1->WellScopedExp store e2 -> WellScopedExp store (Add e1 e2).
+  
+  
+  
   Check listmap.contains_implies_lookup_some.
   Fixpoint interp  (s:listmap.abstract_map value) (e : Exp) (proof : WellScopedExp s e) : value :=
     match proof with
@@ -143,6 +161,16 @@ Inductive evalStm :  Stm -> listmap.abstract_map value -> (value * listmap.abstr
                                        end
       | AddScoped  H1 H2=> Z.add (interp H1) (interp H2)
     end.
+    Fixpoint interp_to_va (V : Set) (VA: ValueAlgebra V) (s:listmap.abstract_map V) (e : Exp) (proof : WellScopedExp s e) : V :=
+    match proof with
+      |LitScoped _ n => lit n
+      
+      |VarScoped s x contains_proof => match (listmap.contains_implies_lookup_some s x contains_proof) with
+                                          | exist _ v H => v
+                                       end
+      | AddScoped H1 H2=> add (interp_to_va VA H1) (interp_to_va VA H2)
+    end.
+  
                                            
     
     
@@ -206,8 +234,18 @@ Inductive prop : Set :=
     
     end.
     
+    Inductive WellScopedProp (V : Set) : listmap.abstract_map V->Foas.prop->Type :=
+     |TrueScoped : forall store, WellScopedProp store T
+     |FalseScoped: forall store, WellScopedProp store F
+     |ImpliesScoped: forall store l r, WellScopedProp store l->WellScopedProp store r->WellScopedProp store (Implies l r)
+     |AndScoped :  forall store l r, WellScopedProp store l->WellScopedProp store r->WellScopedProp store (And l r)
+     |OrScoped :  forall store l r, WellScopedProp store l->WellScopedProp store r->WellScopedProp store (Or l r)
+     |ForallScoped: forall store value name body, WellScopedProp (listmap.insert name value store) body -> WellScopedProp store (Forall name body)
+     |CmpScoped: forall c l r store, PL.WellScopedExp store l-> PL.WellScopedExp store r-> WellScopedProp store (Cmp c l r).
+    
+    
     (*this states falsely that everything is well_scoped*)
-    Lemma everything_well_scoped : forall s e, PL.WellScopedExp s e.
+    Lemma everything_well_scoped : forall (s:listmap.abstract_map PL.value) e, PL.WellScopedExp s e.
     Admitted.
      
     Fixpoint semant (s:listmap.abstract_map PL.value) (p : prop)  : Prop :=
@@ -306,11 +344,63 @@ Inductive prop (A : Set) : Set :=
      
      Check local.
      
-     Fixpoint foas_to_phoas (V:Set) (env : listmap.abstract_map V) (foasprop : Foas.prop) : prop V . Admitted.
      
-     Fixpoint foas_contract_to_phoas_contract (V : Set) (env : listmap.abstract_map V) (foas_contract : Foas.Contract) : Contract V :=
+     (*
+     |TrueScoped : forall store, WellScopedProp store T
+     |FalseScoped: forall store, WellScopedProp store F
+     |ImpliesScoped: forall store l r, WellScopedProp store l->WellScopedProp store r->WellScopedProp store (Implies l r)
+     |AndScoped :  forall store l r, WellScopedProp store l->WellScopedProp store r->WellScopedProp store (And l r)
+     |OrScoped :  forall store l r, WellScopedProp store l->WellScopedProp store r->WellScopedProp store (Or l r)
+     |ForallScoped: forall store name value body, WellScopedProp (listmap.insert name value store) body -> WellScopedProp store (Forall name body)
+     |CmpScoped: forall c l r store, PL.WellScopedExp store l-> PL.WellScopedExp store r-> WellScopedProp store (Cmp c l r).*)
+     Fixpoint foas_to_phoas (V:Set) (VA: PL.ValueAlgebra V) (env : listmap.abstract_map V) (foasprop : Foas.prop) (proof : Foas.WellScopedProp env foasprop ) : prop V :=
+     match proof with
+     |Foas.TrueScoped _ => T V
+     |Foas.FalseScoped _ => F V
+     |Foas.ImpliesScoped H1 H2 => Implies (foas_to_phoas VA H1) (foas_to_phoas VA H2)
+     |Foas.AndScoped H1 H2=> And (foas_to_phoas VA H1) (foas_to_phoas VA H2)
+     |Foas.OrScoped H1 H2=> Or (foas_to_phoas VA H1) (foas_to_phoas VA H2)
+     |Foas.ForallScoped H => Forall (fun arg => foas_to_phoas VA H)
+     |Foas.CmpScoped cmp H1 H2 => Cmp cmp (PL.interp_to_va VA H1) (PL.interp_to_va VA H2)
+     end. (*there is something fishy about the Forall case. I should pass the arg into the recursive call, but i don't know if this is done implicitely by H or not. I don't know which values for name and value are picked in H*)
+     
+     
+     Definition simpleProp : Foas.prop  := Foas.Forall "x" (Foas.Implies (Foas.Cmp SmallerThan (PL.Lit 1%Z) (PL.Var "x"))(Foas.Cmp GreaterThanEqual (PL.Lit 0%Z) (PL.Var "x"))).
+     
+     Check Foas.WellScopedProp.
+     Check Foas.ForallScoped.
+     
+     Lemma simplePropScoped : Foas.WellScopedProp (nil:listmap.abstract_map True) simpleProp.
+     Proof.
+     unfold simpleProp.
+     eapply Foas.ForallScoped.
+     eapply Foas.ImpliesScoped.
+     + eapply Foas.CmpScoped .
+      - eapply PL.LitScoped.
+      - eapply PL.VarScoped.
+        eapply listmap.insert_implies_contains. eauto.
+     + eapply Foas.CmpScoped. 
+       - eapply PL.LitScoped.
+       - eapply PL.VarScoped.
+        eapply listmap.insert_implies_contains. eauto.
+     Unshelve.
+     auto.
+     Qed.
+     
+     
+     
+      
+     
+     
+     
+     
+     
+     Fixpoint foas_to_phoas_admitted (V:Set) (env : listmap.abstract_map V) (foasprop : Foas.prop) : prop V. Admitted.
+     
+     
+     Definition foas_contract_to_phoas_contract (V : Set) (env : listmap.abstract_map V) (foas_contract : Foas.Contract) : Contract V :=
      match foas_contract with
-      | Foas.MkContract forallVar pre prog  arg result post => ForallC (fun v => HoareTriple (foas_to_phoas (listmap.singleton forallVar v) pre) prog v (fun r => foas_to_phoas (listmap.double forallVar v result r) post) )
+      | Foas.MkContract forallVar pre prog  arg result post => ForallC (fun v => HoareTriple (foas_to_phoas_admitted (listmap.singleton forallVar v) pre) prog v (fun r => foas_to_phoas_admitted (listmap.double forallVar v result r) post) )
      end .
      
    Fixpoint phoas_to_foas_reader (r : Phoas.prop (IntReader PL.Exp)) : IntReader Foas.prop :=
@@ -347,7 +437,7 @@ Inductive prop (A : Set) : Set :=
    
    
    
-   
+   (* tbcCheck phoas_to_foas (Foas.foas_to_phoas simplePropScoped). *)
 End Phoas.
 
 
@@ -438,10 +528,14 @@ Section constraintGeneration.
   
   
   (*when extending to dealing with lists, the argument given to prog refers to the value associated with the values in forallVar. Right now, we ignore arg because we know it must be the string mentioned in forallVar.*)
-  Definition adequate (contract:Foas.Contract) : forall  forallVar pre stm arg resultName post result endStore fName,  contract=Foas.MkContract forallVar pre (PL.Fun fName arg stm ) forallVar resultName post -> forall inp, (Foas.semant (listmap.singleton forallVar inp) pre) -> PL.evalStm stm (listmap.singleton arg inp) (result,endStore) -> Foas.semant (listmap.double forallVar inp resultName result) post.
+  Definition adequate (contract:Foas.Contract) :Prop := forall  forallVar pre stm arg resultName post result endStore fName,  contract=Foas.MkContract forallVar pre (PL.Fun fName arg stm ) forallVar resultName post -> forall inp, (Foas.semant (listmap.singleton forallVar inp) pre) -> PL.evalStm stm (listmap.singleton arg inp) (result,endStore) -> Foas.semant (listmap.double forallVar inp resultName result) post. 
+  
+  
+  Lemma vcSound (contract:Foas.Contract) : 
+  Foas.semant nil (vc_foas contract) -> adequate contract. 
    
   
-  
+  (*
   
   
  
@@ -548,7 +642,7 @@ Section constraintGeneration.
 
 
 
-*)
+*)*)
 
 
 
@@ -577,28 +671,3 @@ End constraintGeneration.
 
 
 
-
-
-
- Admitted.  Admitted.  
-  Proof.
-  intros. split.
-  - eapply wpPrecondition.
-  - eapply wpWeakest.
-  Qed.
-  
-  Proof.
-  intros.
-  unfold vc in H0.
-  rewrite H in  H0.
-  eapply semantForall in H0.
-  - eapply semantImplies  in H0.
-   +  Check wpWeakest.
-      Check wpPrecondition.
-   eapply wpPrecondition.
-    *  intros. eapply wpWeakest; eauto.
-    * eapply wpPrecondition;eauto.
-    * apply H2.
-   
-   + admit.
-   - admit.
