@@ -365,27 +365,7 @@ Inductive prop (A : Set) : Set :=
      end. (*there is something fishy about the Forall case. I should pass the arg into the recursive call, but i don't know if this is done implicitely by H or not. I don't know which values for name and value are picked in H*)
      
      
-     Definition simpleProp : Foas.prop  := Foas.Forall "x" (Foas.Implies (Foas.Cmp SmallerThan (PL.Lit 1%Z) (PL.Var "x"))(Foas.Cmp GreaterThanEqual (PL.Lit 0%Z) (PL.Var "x"))).
      
-     Check Foas.WellScopedProp.
-     Check Foas.ForallScoped.
-     
-     Lemma simplePropScoped : Foas.WellScopedProp (nil:listmap.abstract_map True) simpleProp.
-     Proof.
-     unfold simpleProp.
-     eapply Foas.ForallScoped.
-     eapply Foas.ImpliesScoped.
-     + eapply Foas.CmpScoped .
-      - eapply PL.LitScoped.
-      - eapply PL.VarScoped.
-        eapply listmap.insert_implies_contains. eauto.
-     + eapply Foas.CmpScoped. 
-       - eapply PL.LitScoped.
-       - eapply PL.VarScoped.
-        eapply listmap.insert_implies_contains. eauto.
-     Unshelve.
-     auto.
-     Qed.
      
      
      
@@ -438,6 +418,34 @@ Inductive prop (A : Set) : Set :=
    
    
    (* tbcCheck phoas_to_foas (Foas.foas_to_phoas simplePropScoped). *)
+   
+   
+   
+   Definition simpleProp : Foas.prop  := Foas.Forall "x" (Foas.Implies (Foas.Cmp SmallerThan (PL.Lit 1%Z) (PL.Var "x"))(Foas.Cmp GreaterThanEqual (PL.Lit 0%Z) (PL.Var "x"))).
+     
+     Check Foas.WellScopedProp.
+     Check Foas.ForallScoped.
+     
+     Lemma simplePropScoped : Foas.WellScopedProp (nil:listmap.abstract_map True) simpleProp.
+     Proof.
+     unfold simpleProp.
+     eapply Foas.ForallScoped.
+     eapply Foas.ImpliesScoped.
+     + eapply Foas.CmpScoped .
+      - eapply PL.LitScoped.
+      - eapply PL.VarScoped.
+        eapply listmap.insert_implies_contains. eauto.
+     + eapply Foas.CmpScoped. 
+       - eapply PL.LitScoped.
+       - eapply PL.VarScoped.
+        eapply listmap.insert_implies_contains. eauto.
+     Unshelve.
+     auto.
+     Qed.
+     
+     Compute phoas_to_foas (foas_to_phoas reader_valueAlgebra simplePropScoped).
+   
+   
 End Phoas.
 
 
