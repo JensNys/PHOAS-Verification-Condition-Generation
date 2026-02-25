@@ -419,14 +419,13 @@ Inductive prop (A : Set) : Set :=
    
    (* tbcCheck phoas_to_foas (Foas.foas_to_phoas simplePropScoped). *)
    
-   
-   
-   Definition simpleProp : Foas.prop  := Foas.Forall "x" (Foas.Implies (Foas.Cmp SmallerThan (PL.Lit 1%Z) (PL.Var "x"))(Foas.Cmp GreaterThanEqual (PL.Lit 0%Z) (PL.Var "x"))).
+   Definition WellScopedProp2 : list string->Foas.prop -> Prop. Admitted.
+  
+   Definition simpleProp : Foas.prop  := Foas.Forall "x" (Foas.Implies (Foas.Cmp SmallerThan (PL.Lit 1%Z) (PL.Var "x"))(Foas.Cmp SmallerThan (PL.Lit 0%Z) (PL.Var "x"))).
      
-     Check Foas.WellScopedProp.
-     Check Foas.ForallScoped.
      
-     Lemma simplePropScoped : Foas.WellScopedProp (nil:listmap.abstract_map True) simpleProp.
+     
+     Lemma simplePropScoped : WellScopedProp2 nil simpleProp.
      Proof.
      unfold simpleProp.
      eapply Foas.ForallScoped.
@@ -536,10 +535,10 @@ Section constraintGeneration.
   
   
   (*when extending to dealing with lists, the argument given to prog refers to the value associated with the values in forallVar. Right now, we ignore arg because we know it must be the string mentioned in forallVar.*)
-  Definition adequate (contract:Foas.Contract) :Prop := forall  forallVar pre stm arg resultName post result endStore fName,  contract=Foas.MkContract forallVar pre (PL.Fun fName arg stm ) forallVar resultName post -> forall inp, (Foas.semant (listmap.singleton forallVar inp) pre) -> PL.evalStm stm (listmap.singleton arg inp) (result,endStore) -> Foas.semant (listmap.double forallVar inp resultName result) post. 
+  Definition contract_semant (contract:Foas.Contract) :Prop := forall  forallVar pre stm arg resultName post result endStore fName,  contract=Foas.MkContract forallVar pre (PL.Fun fName arg stm ) forallVar resultName post -> forall inp, (Foas.semant (listmap.singleton forallVar inp) pre) -> PL.evalStm stm (listmap.singleton arg inp) (result,endStore) -> Foas.semant (listmap.double forallVar inp resultName result) post. 
   
   
-  Lemma vcSound (contract:Foas.Contract) : 
+  Lemma adequacy (contract:Foas.Contract) : 
   Foas.semant nil (vc_foas contract) -> adequate contract. 
    
   
