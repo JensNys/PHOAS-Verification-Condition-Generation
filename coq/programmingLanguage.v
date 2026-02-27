@@ -20,30 +20,92 @@ Set Implicit Arguments.
 
   
 
+Module debruijnmap.
+
+Definition debruijnmap (A : Set)  := list A.
+
+Definition lookup (A : Set) (k : nat) (store : debruijnmap A) : option A :=
+  nth_error store k.
+  Search "length".
+  Search (Z->nat).
+  
+  Definition contains (A : Set)  (store : debruijnmap A) (k : nat) :Prop :=
+   k < length store.
+
+Definition insert (A : Set)  (v : A) (store : debruijnmap A) : debruijnmap A :=
+   v::store.
+  
+  
+  Definition singleton (A : Set) (k : nat) (v : A)  : debruijnmap A :=
+  v :: nil.
+  Definition double (A : Set) (v1 : A)  (v2 : A)  : debruijnmap A :=
+  v1:: v2 :: nil.
+  
+Fixpoint delete (A : Set) (k : nat)  (store : debruijnmap A) : debruijnmap A :=
+  match store with
+        | nil => nil
+        | v :: rest => if ( Nat.eqb k 0) then rest else (v) :: (delete (k-1) rest)
+  end.
+  
+  
+  Search "nth_error".
+  Search "nth_In".
+  Lemma contains_implies_lookup_some: forall (A:Set) (store : debruijnmap A) k, contains store k -> {v | lookup k store = Some v}.
+  Proof.
+  intros A store k H.
+  unfold contains in H.
+  apply nth_error_Some in H.
+  fold lookup.
+   destruct (nth_error store k) as [v|] eqn:Heq.
+   - unfold lookup.
+   exists v.
+   simpl.
+   rewrite Heq.
+   reflexivity.
+   - contradiction.
+   Qed.
+     
+  
+  (*
+  Lemma insert_implies_contains : forall (A:Set) (store : debruijnmap A) store' key value, store' = insert key value store-> contains store' key.
+  Proof.
+ intros A store store' key value H.
+  (* 1. Replace store' with its definition using the hypothesis H *)
+  subst store'.
+  (* 2. Unfold 'insert' and 'contains' to see the underlying logic *)
+  unfold insert, contains.
+  (* 3. You are left with: (if key =? key then true else contains store key) *)
+  (* The term (key =? key) simplifies to true. *)
+  rewrite String.eqb_refl.
+  (* 4. Now the goal is simply 'true', which in a Prop context means 'Is_true true' *)
+  simpl. 
+  exact I. (* 'I' is the constructor for 'True' *)*)
+End debruijnmap.
+
 
 Module listmap.
 
-Definition abstract_map (A : Set)  := list (string*A).
-Fixpoint lookup (A : Set) (k : string) (store : abstract_map A) : option A :=
+Definition string_map (A : Set)  := list (string*A).
+Fixpoint lookup (A : Set) (k : string) (store : string_map A) : option A :=
   match store with
         | nil => None
         | (k',v) :: rest => if ( String.eqb k k') then Some v else lookup k rest
   end.
   
-  Fixpoint contains (A : Set)  (store : abstract_map A) (k : string) :Prop :=
+  Fixpoint contains (A : Set)  (store : string_map A) (k : string) :Prop :=
   match store with
         | nil => false
         | (k',v) :: rest => if ( String.eqb k k') then true else contains rest k
   end.
 
-Definition insert (A : Set) (k : string) (v : A) (store : abstract_map A) : abstract_map A :=
+Definition insert (A : Set) (k : string) (v : A) (store : string_map A) : string_map A :=
   (k,v) :: store.
-  Definition singleton (A : Set) (k : string) (v : A)  : abstract_map A :=
+  Definition singleton (A : Set) (k : string) (v : A)  : string_map A :=
   (k,v) :: nil.
-  Definition double (A : Set) (k1 : string) (v1 : A) (k2 : string) (v2 : A)  : abstract_map A :=
+  Definition double (A : Set) (k1 : string) (v1 : A) (k2 : string) (v2 : A)  : string_map A :=
   (k2,v2) :: (k1,v1) :: nil.
   
-Fixpoint delete (A : Set) (k : string)  (store : abstract_map A) : abstract_map A :=
+Fixpoint delete (A : Set) (k : string)  (store : string_map A) : string_map A :=
   match store with
         | nil => nil
         | (k',v) :: rest => if ( String.eqb k k') then rest else (k',v) :: (delete k rest)
@@ -51,7 +113,7 @@ Fixpoint delete (A : Set) (k : string)  (store : abstract_map A) : abstract_map 
   
   
   Search "?=".
-  Lemma contains_implies_lookup_some: forall (A:Set) (store : abstract_map A) k, contains store k -> {v | lookup k store = Some v}.
+  Lemma contains_implies_lookup_some: forall (A:Set) (store : string_map A) k, contains store k -> {v | lookup k store = Some v}.
   Proof.
   intros.
   induction store.
@@ -68,7 +130,7 @@ Fixpoint delete (A : Set) (k : string)  (store : abstract_map A) : abstract_map 
       unfold contains in H. rewrite Heq in H. simpl in H.  apply H.
       Qed.
       
-  Lemma insert_implies_contains : forall (A:Set) (store : abstract_map A) store' key value, store' = insert key value store-> contains store' key.
+  Lemma insert_implies_contains : forall (A:Set) (store : string_map A) store' key value, store' = insert key value store-> contains store' key.
   Proof.
  intros A store store' key value H.
   (* 1. Replace store' with its definition using the hypothesis H *)
@@ -93,16 +155,16 @@ End listmap.
 
 Module PL.
 Definition value := Z.
-(*Definition eval_store := listmap.abstract_map value.*)
+(*Definition eval_store := listmap.string_map value.*)
 Inductive Exp  : Set :=
   | Lit (n : value)
-  | Var (x : string)
+  | Var (x : nat)
   | Add (e1 e2 : Exp).
   
   
 Inductive Stm : Set :=
   | Expr (e : Exp)
-  | Let (x : string) (e : Exp) (body:Stm).
+  | Let (e : Exp) (body:Stm).
 Inductive Prog : Set :=
   | Fun (functionName : string) (param : string) (body : Stm).
   
@@ -133,26 +195,26 @@ Since a contract and it postcondition makes a statement about terminating progra
 therefore in our case i don't think we have a need for a small-step semantics. *)
 
 (* big step semantics for expressions*)
-Inductive evalExp  :  Exp -> listmap.abstract_map value -> value ->Prop :=
+Inductive evalExp  :  Exp -> debruijnmap.debruijnmap value -> value ->Prop :=
   | EvalLit : forall n store, evalExp (Lit n) store (  n)
-  | EvalVar : forall x store v,  listmap.lookup x store = Some v -> evalExp (Var x) store v
+  | EvalVar : forall x store v,  debruijnmap.lookup x store = Some v -> evalExp (Var x) store v
   | EvalAdd : forall store a b v1 v2, evalExp a store v1 -> evalExp b store v2 -> evalExp (Add a b) store (Z.add v1 v2).
   
 (*big step semantics for statements*)
-Inductive evalStm :  Stm -> listmap.abstract_map value -> (value * listmap.abstract_map value)->Prop :=
+Inductive evalStm :  Stm -> debruijnmap.debruijnmap value -> (value * debruijnmap.debruijnmap value)->Prop :=
   | EvalExpr : forall mv e store, evalExp e store mv -> evalStm  (Expr e) store (mv,store)
-  | EvalLetSucces  : forall x e body store store' result v, evalExp  e store (v) -> evalStm   body (listmap.insert x v store) (result,store')-> evalStm  (Let x e body) store (result, listmap.delete x store') .
+  | EvalLetSucces  : forall e body store store' result v, evalExp  e store (v) -> evalStm   body (debruijnmap.insert v store) (result,store')-> evalStm  (Let e body) store (result,store') .
   
   
-  Inductive WellScopedExp (V:Set) : listmap.abstract_map V->Exp->Type :=
+  Inductive WellScopedExp (V:Set) : debruijnmap.debruijnmap V->Exp->Type :=
   | LitScoped :  forall store n, WellScopedExp store (Lit n)
-  | VarScoped : forall store x, listmap.contains store x-> WellScopedExp store (Var x)
+  | VarScoped : forall store x, debruijnmap.contains store x-> WellScopedExp store (Var x)
   |AddScoped : forall store e1 e2, WellScopedExp store e1->WellScopedExp store e2 -> WellScopedExp store (Add e1 e2).
   
   
   
   Check listmap.contains_implies_lookup_some.
-  Fixpoint interp  (s:listmap.abstract_map value) (e : Exp) (proof : WellScopedExp s e) : value :=
+  Fixpoint interp  (s:listmap.string_map value) (e : Exp) (proof : WellScopedExp s e) : value :=
     match proof with
       |LitScoped _ n => n
       
@@ -161,7 +223,7 @@ Inductive evalStm :  Stm -> listmap.abstract_map value -> (value * listmap.abstr
                                        end
       | AddScoped  H1 H2=> Z.add (interp H1) (interp H2)
     end.
-    Fixpoint interp_to_va (V : Set) (VA: ValueAlgebra V) (s:listmap.abstract_map V) (e : Exp) (proof : WellScopedExp s e) : V :=
+    Fixpoint interp_to_va (V : Set) (VA: ValueAlgebra V) (s:listmap.string_map V) (e : Exp) (proof : WellScopedExp s e) : V :=
     match proof with
       |LitScoped _ n => lit n
       
@@ -234,7 +296,7 @@ Inductive prop : Set :=
     
     end.
     
-    Inductive WellScopedProp (V : Set) : listmap.abstract_map V->Foas.prop->Type :=
+    Inductive WellScopedProp (V : Set) : listmap.string_map V->Foas.prop->Type :=
      |TrueScoped : forall store, WellScopedProp store T
      |FalseScoped: forall store, WellScopedProp store F
      |ImpliesScoped: forall store l r, WellScopedProp store l->WellScopedProp store r->WellScopedProp store (Implies l r)
@@ -245,10 +307,10 @@ Inductive prop : Set :=
     
     
     (*this states falsely that everything is well_scoped*)
-    Lemma everything_well_scoped : forall (s:listmap.abstract_map PL.value) e, PL.WellScopedExp s e.
+    Lemma everything_well_scoped : forall (s:listmap.string_map PL.value) e, PL.WellScopedExp s e.
     Admitted.
      
-    Fixpoint semant (s:listmap.abstract_map PL.value) (p : prop)  : Prop :=
+    Fixpoint semant (s:listmap.string_map PL.value) (p : prop)  : Prop :=
     match p with
       | T => True
       | F => False
@@ -353,7 +415,7 @@ Inductive prop (A : Set) : Set :=
      |OrScoped :  forall store l r, WellScopedProp store l->WellScopedProp store r->WellScopedProp store (Or l r)
      |ForallScoped: forall store name value body, WellScopedProp (listmap.insert name value store) body -> WellScopedProp store (Forall name body)
      |CmpScoped: forall c l r store, PL.WellScopedExp store l-> PL.WellScopedExp store r-> WellScopedProp store (Cmp c l r).*)
-     Fixpoint foas_to_phoas (V:Set) (VA: PL.ValueAlgebra V) (env : listmap.abstract_map V) (foasprop : Foas.prop) (proof : Foas.WellScopedProp env foasprop ) : prop V :=
+     Fixpoint foas_to_phoas (V:Set) (VA: PL.ValueAlgebra V) (env : listmap.string_map V) (foasprop : Foas.prop) (proof : Foas.WellScopedProp env foasprop ) : prop V :=
      match proof with
      |Foas.TrueScoped _ => T V
      |Foas.FalseScoped _ => F V
@@ -375,10 +437,10 @@ Inductive prop (A : Set) : Set :=
      
      
      
-     Fixpoint foas_to_phoas_admitted (V:Set) (env : listmap.abstract_map V) (foasprop : Foas.prop) : prop V. Admitted.
+     Fixpoint foas_to_phoas_admitted (V:Set) (env : listmap.string_map V) (foasprop : Foas.prop) : prop V. Admitted.
      
      
-     Definition foas_contract_to_phoas_contract (V : Set) (env : listmap.abstract_map V) (foas_contract : Foas.Contract) : Contract V :=
+     Definition foas_contract_to_phoas_contract (V : Set) (env : listmap.string_map V) (foas_contract : Foas.Contract) : Contract V :=
      match foas_contract with
       | Foas.MkContract forallVar pre prog  arg result post => ForallC (fun v => HoareTriple (foas_to_phoas_admitted (listmap.singleton forallVar v) pre) prog v (fun r => foas_to_phoas_admitted (listmap.double forallVar v result r) post) )
      end .
@@ -456,7 +518,7 @@ End Phoas.
 
 Section constraintGeneration.
 
-  Definition Wstore (V A:Set) := (A -> listmap.abstract_map V -> Phoas.prop V) -> listmap.abstract_map V -> Phoas.prop V.
+  Definition Wstore (V A:Set) := (A -> listmap.string_map V -> Phoas.prop V) -> listmap.string_map V -> Phoas.prop V.
   Definition ret (V A:Set) (a:A) : Wstore V A := fun post store => post a store.
   Definition bind (V A B:Set) (c : Wstore V A) (k : A->Wstore V B) : Wstore V B :=
   fun post store1 => c (fun a store2 => (k a) post store2) store1.
@@ -496,11 +558,11 @@ Section constraintGeneration.
                          ))))
   end.
   
-  Definition wp (V:Set) (VA : PL.ValueAlgebra V) (stm : PL.Stm) (post : V -> listmap.abstract_map V -> Phoas.prop V)  (initStore : listmap.abstract_map V) : Phoas.prop V :=
+  Definition wp (V:Set) (VA : PL.ValueAlgebra V) (stm : PL.Stm) (post : V -> listmap.string_map V -> Phoas.prop V)  (initStore : listmap.string_map V) : Phoas.prop V :=
   (exec_stm VA stm) post initStore.
   
   
-  Definition weaken (V:Set) (post : V->Phoas.prop V) : V->listmap.abstract_map V->Phoas.prop V :=
+  Definition weaken (V:Set) (post : V->Phoas.prop V) : V->listmap.string_map V->Phoas.prop V :=
   fun result _ => post result.
   
   Fixpoint vc (V:Set) (VA : PL.ValueAlgebra V) (contract : Phoas.Contract V) : Phoas.prop V :=
@@ -527,7 +589,7 @@ Section constraintGeneration.
   (*this definition throws away the v, while p can depend on v.*)
   Lemma semantForall : forall (V:Set) (p : Phoas.prop V) (f: V-> Phoas.prop V), f =(fun v=>p) -> semantp (Phoas.Forall f) -> forall v', semantp (f v'). Admitted. 
   
-  Definition satisfies_post_angelic (V:Set) (post: V->listmap.abstract_map V->Phoas.prop V)(t : (V * listmap.abstract_map V)) : Phoas.prop V :=
+  Definition satisfies_post_angelic (V:Set) (post: V->listmap.string_map V->Phoas.prop V)(t : (V * listmap.string_map V)) : Phoas.prop V :=
   match t with 
   | (v,s) => post v s
   end.
@@ -549,26 +611,26 @@ Section constraintGeneration.
   
 
   (*(*wp generates a precondition*)
-  Lemma wpPrecondition : forall (V:Set) (VA:PL.ValueAlgebra V) (post : V->listmap.abstract_map V->Phoas.prop V) (stm : PL.Stm) (initStore :  listmap.abstract_map V) r, 
+  Lemma wpPrecondition : forall (V:Set) (VA:PL.ValueAlgebra V) (post : V->listmap.string_map V->Phoas.prop V) (stm : PL.Stm) (initStore :  listmap.string_map V) r, 
   
   semantp (wp VA stm post initStore) -> PL.evalStm VA stm initStore r -> semantp (satisfies_post_angelic post r). Admitted.
   *)
   
   
   (*wp generates the weakest precondition*)
-  Lemma wpWeakest : forall (V:Set) (VA:PL.ValueAlgebra V) (post : V->listmap.abstract_map V->Phoas.prop V) (stm : PL.Stm) (pre : Phoas.prop V) (initStore :  listmap.abstract_map V) r,       
+  Lemma wpWeakest : forall (V:Set) (VA:PL.ValueAlgebra V) (post : V->listmap.string_map V->Phoas.prop V) (stm : PL.Stm) (pre : Phoas.prop V) (initStore :  listmap.string_map V) r,       
   
   ((semantp pre) -> PL.evalStm VA stm initStore r-> semantp (satisfies_post_angelic post r)) (*if pre is a precondition*)
   ->
   (semantp pre -> semantp (wp VA stm post initStore) ). Admitted. (*pre implies the weakest precondition *)
   
-  Lemma wpPrecondition : forall (V:Set) (VA:PL.ValueAlgebra V) (post : V->listmap.abstract_map V->Phoas.prop V) (stm : PL.Stm) (pre : Phoas.prop V) (initStore :  listmap.abstract_map V) result,       
+  Lemma wpPrecondition : forall (V:Set) (VA:PL.ValueAlgebra V) (post : V->listmap.string_map V->Phoas.prop V) (stm : PL.Stm) (pre : Phoas.prop V) (initStore :  listmap.string_map V) result,       
   
   (semantp pre -> semantp (wp VA stm post initStore) )
   ->
   ((semantp pre) -> PL.evalStm VA stm initStore result-> semantp (satisfies_post_angelic post result)).  Admitted.
   
-  Lemma wpCorrect  : forall (V:Set) (VA:PL.ValueAlgebra V) (post : V->listmap.abstract_map V->Phoas.prop V) (stm : PL.Stm) (pre : Phoas.prop V) (initStore :  listmap.abstract_map V) result,       
+  Lemma wpCorrect  : forall (V:Set) (VA:PL.ValueAlgebra V) (post : V->listmap.string_map V->Phoas.prop V) (stm : PL.Stm) (pre : Phoas.prop V) (initStore :  listmap.string_map V) result,       
   
   (semantp pre -> semantp (wp VA stm post initStore) )
   <->
@@ -642,7 +704,7 @@ Section constraintGeneration.
   
   
   
-  (post : PL.value -> Phoas.prop PL.value) (stm : PL.Stm) (initStore : list_map.abstract_map PL.value) ()
+  (post : PL.value -> Phoas.prop PL.value) (stm : PL.Stm) (initStore : list_map.string_map PL.value) ()
 
 
 
