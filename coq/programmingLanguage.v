@@ -29,8 +29,11 @@ Definition lookup (A : Set) (k : nat) (store : debruijnmap A) : option A :=
   Search "length".
   Search (Z->nat).
   
+  
   Definition contains (A : Set)  (store : debruijnmap A) (k : nat) :Prop :=
    k < length store.
+  
+  
 
 Definition insert (A : Set)  (v : A) (store : debruijnmap A) : debruijnmap A :=
    v::store.
@@ -214,20 +217,20 @@ Inductive evalStm :  Stm -> debruijnmap.debruijnmap value -> (value * debruijnma
   
   
   Check listmap.contains_implies_lookup_some.
-  Fixpoint interp  (s:listmap.string_map value) (e : Exp) (proof : WellScopedExp s e) : value :=
+  Fixpoint interp  (s: debruijnmap.debruijnmap value) (e : Exp) (proof : WellScopedExp s e) : value :=
     match proof with
       |LitScoped _ n => n
       
-      |VarScoped s x contains_proof => match (listmap.contains_implies_lookup_some s x contains_proof) with
+      |VarScoped contains_proof => match (debruijnmap.contains_implies_lookup_some contains_proof) with
                                           | exist _ v H => v
                                        end
       | AddScoped  H1 H2=> Z.add (interp H1) (interp H2)
     end.
-    Fixpoint interp_to_va (V : Set) (VA: ValueAlgebra V) (s:listmap.string_map V) (e : Exp) (proof : WellScopedExp s e) : V :=
+    Fixpoint interp_to_va (V : Set) (VA: ValueAlgebra V) (s:debruijnmap.debruijnmap V) (e : Exp) (proof : WellScopedExp s e) : V :=
     match proof with
       |LitScoped _ n => lit n
       
-      |VarScoped s x contains_proof => match (listmap.contains_implies_lookup_some s x contains_proof) with
+      |VarScoped contains_proof => match (debruijnmap.contains_implies_lookup_some contains_proof) with
                                           | exist _ v H => v
                                        end
       | AddScoped H1 H2=> add (interp_to_va VA H1) (interp_to_va VA H2)
@@ -275,7 +278,7 @@ Inductive prop : Set :=
   | Implies (l : prop) (r : prop)
   | And (l : prop) (r : prop)
   | Or (l : prop) (r : prop)
-  | Forall (var:string ) (p :  prop).
+  | Forall (p :  prop).
   
   
   
@@ -296,28 +299,30 @@ Inductive prop : Set :=
     
     end.
     
-    Inductive WellScopedProp (V : Set) : listmap.string_map V->Foas.prop->Type :=
+    Inductive WellScopedProp (V : Set) : debruijnmap.debruijnmap V->Foas.prop->Type :=
      |TrueScoped : forall store, WellScopedProp store T
      |FalseScoped: forall store, WellScopedProp store F
      |ImpliesScoped: forall store l r, WellScopedProp store l->WellScopedProp store r->WellScopedProp store (Implies l r)
      |AndScoped :  forall store l r, WellScopedProp store l->WellScopedProp store r->WellScopedProp store (And l r)
      |OrScoped :  forall store l r, WellScopedProp store l->WellScopedProp store r->WellScopedProp store (Or l r)
-     |ForallScoped: forall store value name body, WellScopedProp (listmap.insert name value store) body -> WellScopedProp store (Forall name body)
+     |ForallScoped : forall store body, 
+      (forall (v : V), WellScopedProp (debruijnmap.insert v store) body) -> 
+      WellScopedProp store (Foas.Forall body)
      |CmpScoped: forall c l r store, PL.WellScopedExp store l-> PL.WellScopedExp store r-> WellScopedProp store (Cmp c l r).
     
     
     (*this states falsely that everything is well_scoped*)
-    Lemma everything_well_scoped : forall (s:listmap.string_map PL.value) e, PL.WellScopedExp s e.
+    Lemma everything_well_scoped : forall (s:debruijnmap.debruijnmap PL.value) e, PL.WellScopedExp s e.
     Admitted.
      
-    Fixpoint semant (s:listmap.string_map PL.value) (p : prop)  : Prop :=
+    Fixpoint semant (s:debruijnmap.debruijnmap PL.value) (p : prop)  : Prop :=
     match p with
       | T => True
       | F => False
       | Implies l r  =>forall _ : (semant s l), (semant s r)
       | And l r => and  (semant s l) (semant s r)
       | Or l r => or (semant s l) (semant s r)
-      | Forall var p => forall (v : PL.value), semant (listmap.insert var v s) p
+      | Forall p => forall (v : PL.value), semant (debruijnmap.insert v s) p
       | Cmp r a b => (semant_Relop r) (PL.interp (everything_well_scoped s a)) (PL.interp (everything_well_scoped s b)) 
     end.
      
@@ -415,16 +420,24 @@ Inductive prop (A : Set) : Set :=
      |OrScoped :  forall store l r, WellScopedProp store l->WellScopedProp store r->WellScopedProp store (Or l r)
      |ForallScoped: forall store name value body, WellScopedProp (listmap.insert name value store) body -> WellScopedProp store (Forall name body)
      |CmpScoped: forall c l r store, PL.WellScopedExp store l-> PL.WellScopedExp store r-> WellScopedProp store (Cmp c l r).*)
-     Fixpoint foas_to_phoas (V:Set) (VA: PL.ValueAlgebra V) (env : listmap.string_map V) (foasprop : Foas.prop) (proof : Foas.WellScopedProp env foasprop ) : prop V :=
+     
+     Fixpoint foas_to_phoas (V:Set) (VA: PL.ValueAlgebra V) (env : debruijnmap.debruijnmap V) (foasprop : Foas.prop) (proof : Foas.WellScopedProp env foasprop ) : prop V :=
      match proof with
      |Foas.TrueScoped _ => T V
      |Foas.FalseScoped _ => F V
      |Foas.ImpliesScoped H1 H2 => Implies (foas_to_phoas VA H1) (foas_to_phoas VA H2)
      |Foas.AndScoped H1 H2=> And (foas_to_phoas VA H1) (foas_to_phoas VA H2)
      |Foas.OrScoped H1 H2=> Or (foas_to_phoas VA H1) (foas_to_phoas VA H2)
-     |Foas.ForallScoped H => Forall (fun arg => foas_to_phoas VA H)
+     |@Foas.ForallScoped _ store value H => 
+    Forall (fun arg => 
+      foas_to_phoas VA (H arg)
+    )
      |Foas.CmpScoped cmp H1 H2 => Cmp cmp (PL.interp_to_va VA H1) (PL.interp_to_va VA H2)
-     end. (*there is something fishy about the Forall case. I should pass the arg into the recursive call, but i don't know if this is done implicitely by H or not. I don't know which values for name and value are picked in H*)
+     end. 
+     
+     
+     
+     (*there is something fishy about the Forall case. I should pass the arg into the recursive call, but i don't know if this is done implicitely by H or not. I don't know which values for name and value are picked in H*)
      
      
      
@@ -444,6 +457,7 @@ Inductive prop (A : Set) : Set :=
      match foas_contract with
       | Foas.MkContract forallVar pre prog  arg result post => ForallC (fun v => HoareTriple (foas_to_phoas_admitted (listmap.singleton forallVar v) pre) prog v (fun r => foas_to_phoas_admitted (listmap.double forallVar v result r) post) )
      end .
+     Search (Z->nat).
      
    Fixpoint phoas_to_foas_reader (r : Phoas.prop (IntReader PL.Exp)) : IntReader Foas.prop :=
    match r with
@@ -464,11 +478,11 @@ Inductive prop (A : Set) : Set :=
                       bind (phoas_to_foas_reader r) (fun r2 =>
                       ret (Foas.Or r1 r2)))
     | Forall f => bind ask (fun i => 
-                  bind (local (fun i=>Z.add i 1) (phoas_to_foas_reader (f (ret (PL.Var ("x" ++ (of_Z i))))) ) ) (fun body =>
+                  bind (local (fun i=>Z.add i 1) (phoas_to_foas_reader (f (ret (PL.Var ( Z.to_nat i))))) ) ) (fun body =>
                   
                   
                   
-                  (ret (Foas.Forall ("x" ++ (of_Z i)) body))))
+                  (ret (Foas.Forall ( (Z.to_nat i)) body)))
     
    
    end.
