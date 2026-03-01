@@ -53,7 +53,7 @@ Fixpoint delete (A : Set) (k : nat)  (store : debruijnmap A) : debruijnmap A :=
   
   Search "nth_error".
   Search "nth_In".
-  Lemma contains_implies_lookup_some: forall (A:Set) (store : debruijnmap A) k, contains store k -> {v | lookup k store = Some v}.
+  Definition contains_implies_lookup_some: forall (A:Set) (store : debruijnmap A) k, contains store k -> {v | lookup k store = Some v}.
   Proof.
   intros A store k H.
   unfold contains in H.
@@ -66,11 +66,21 @@ Fixpoint delete (A : Set) (k : nat)  (store : debruijnmap A) : debruijnmap A :=
    rewrite Heq.
    reflexivity.
    - contradiction.
-   Qed.
+   Defined.
      
   
   
-  Lemma insert_implies_contains : forall (A:Set) (store : debruijnmap A) key, contains (insert key store) 0.
+  Definition insert_implies_contains : forall (A:Set) (store : debruijnmap A) key, contains (insert key store) 0.
+  Proof.
+    intros A store key.
+  (* 1. Reveal the underlying list operations *)
+  unfold contains, insert.
+  (* 2. In your module, debruijnmap is a list, so length is standard list length *)
+  simpl. 
+  (* 3. You are now left with: 0 < S (length store) *)
+  (* In Coq's Peano arithmetic, 0 is always less than a Successor *)
+  auto with arith.
+
   Admitted. 
   
   (*
@@ -323,17 +333,39 @@ Inductive prop : Set :=
     (*this states falsely that everything is well_scoped*)
     
      
-    Fixpoint semant (s:debruijnmap.debruijnmap PL.value) (p : prop) (proof : WellScopedProp s p)  : Prop :=
+    Fixpoint semant (s:debruijnmap.debruijnmap PL.value) (p : Foas.prop) (proof : WellScopedProp s p)  : Prop :=
     match proof with
       | TrueScoped _ => True
       | FalseScoped _ => False
       | ImpliesScoped l r  =>forall _ : (semant l), (semant r)
       | AndScoped l r => and  (semant l) (semant r)
       | OrScoped l r => or (semant l) (semant r)
-      |@Foas.ForallScoped _ store value H => forall arg, semant (H arg)
+      |@Foas.ForallScoped _ _ _ H => forall arg, semant (H arg)
       | CmpScoped comparison l r => (semant_Relop comparison) (PL.interp l) (PL.interp r) 
     end.
-     
+
+
+    
+
+     Set Printing Implicit.
+    (*
+    Lemma ForallSemant : forall s body H, @semant s (Foas.Forall body) (@ForallScoped _ _ _ H) -> forall arg, semant (H arg).
+    Proof.
+      intros.
+      apply H0. 
+    Qed.
+
+
+    Lemma ImpliesSemant : forall  s l r Hl Hr, @semant s (Foas.Implies l r) (ImpliesScoped Hl Hr) -> @semant s l Hl -> @semant s r Hr.
+    Proof.
+      intros.
+      exact (H H0).
+    Qed.
+    
+    
+    *)
+    
+      
      
 (*
 Fixpoint string_to_Prop (var :string) : Prop :=
@@ -507,27 +539,36 @@ Inductive prop (A : Set) : Set :=
      
      
      
-  Lemma simplePropScoped (V:Set): Foas.WellScopedProp  (nil:debruijnmap.debruijnmap V) simpleProp.
+  Definition simplePropScoped (V:Set): Foas.WellScopedProp  (nil:debruijnmap.debruijnmap V) simpleProp.
      Proof.
      unfold simpleProp.
      eapply Foas.ForallScoped.
      intros.
      eapply Foas.ImpliesScoped.
-     + eapply Foas.CmpScoped .
+     + eapply Foas.CmpScoped.
       - eapply PL.LitScoped.
       - eapply PL.VarScoped. eapply  debruijnmap.insert_implies_contains. 
      + eapply Foas.CmpScoped. 
        - eapply PL.LitScoped.
        - eapply PL.VarScoped.
         eapply debruijnmap.insert_implies_contains. 
-     Qed.
+     Defined.
      
      Compute phoas_to_foas (foas_to_phoas reader_valueAlgebra (@simplePropScoped (NatReader PL.Exp))).
      Compute (Foas.semant (simplePropScoped PL.value)).
+     Compute simpleProp.
 
-     Lemma simplePropTrue : (Foas.semant (simplePropScoped PL.value)).
+
      
-   
+     Set Printing Implicit.
+
+     Definition simplePropTrue : @Foas.semant nil simpleProp (simplePropScoped PL.value).
+     Proof.
+      simpl. 
+      (*now we see the verification condition as it should be.*)
+      lia.
+     Qed.
+
    
 End Phoas.
 
