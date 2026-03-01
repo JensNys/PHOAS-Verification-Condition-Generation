@@ -69,20 +69,27 @@ Fixpoint delete (A : Set) (k : nat)  (store : debruijnmap A) : debruijnmap A :=
    Qed.
      
   
+  
+  Lemma insert_implies_contains : forall (A:Set) (store : debruijnmap A) key, contains (insert key store) 0.
+  Admitted. 
+  
   (*
-  Lemma insert_implies_contains : forall (A:Set) (store : debruijnmap A) store' key value, store' = insert key value store-> contains store' key.
+  store' = insert value store-> contains store' key.
   Proof.
  intros A store store' key value H.
   (* 1. Replace store' with its definition using the hypothesis H *)
   subst store'.
   (* 2. Unfold 'insert' and 'contains' to see the underlying logic *)
-  unfold insert, contains.
+  unfold insert, contains, length.
   (* 3. You are left with: (if key =? key then true else contains store key) *)
   (* The term (key =? key) simplifies to true. *)
   rewrite String.eqb_refl.
   (* 4. Now the goal is simply 'true', which in a Prop context means 'Is_true true' *)
   simpl. 
   exact I. (* 'I' is the constructor for 'True' *)*)
+  
+  
+  
 End debruijnmap.
 
 
@@ -132,10 +139,10 @@ Fixpoint delete (A : Set) (k : string)  (store : string_map A) : string_map A :=
     
       unfold contains in H. rewrite Heq in H. simpl in H.  apply H.
       Qed.
-      
-  Lemma insert_implies_contains : forall (A:Set) (store : string_map A) store' key value, store' = insert key value store-> contains store' key.
+    (*Lemma insert_implies_contains : forall (A:Set) (store : string_map A) store' key value, store' = insert key value store-> contains store' key.
   Proof.
- intros A store store' key value H.
+    
+    intros A store store' key value H.
   (* 1. Replace store' with its definition using the hypothesis H *)
   subst store'.
   (* 2. Unfold 'insert' and 'contains' to see the underlying logic *)
@@ -148,7 +155,9 @@ Fixpoint delete (A : Set) (k : string)  (store : string_map A) : string_map A :=
   exact I. (* 'I' is the constructor for 'True' *)
   Qed.
   
+  *)  
   
+ 
 
 
 End listmap.
@@ -312,18 +321,17 @@ Inductive prop : Set :=
     
     
     (*this states falsely that everything is well_scoped*)
-    Lemma everything_well_scoped : forall (s:debruijnmap.debruijnmap PL.value) e, PL.WellScopedExp s e.
-    Admitted.
+    
      
-    Fixpoint semant (s:debruijnmap.debruijnmap PL.value) (p : prop)  : Prop :=
-    match p with
-      | T => True
-      | F => False
-      | Implies l r  =>forall _ : (semant s l), (semant s r)
-      | And l r => and  (semant s l) (semant s r)
-      | Or l r => or (semant s l) (semant s r)
-      | Forall p => forall (v : PL.value), semant (debruijnmap.insert v s) p
-      | Cmp r a b => (semant_Relop r) (PL.interp (everything_well_scoped s a)) (PL.interp (everything_well_scoped s b)) 
+    Fixpoint semant (s:debruijnmap.debruijnmap PL.value) (p : prop) (proof : WellScopedProp s p)  : Prop :=
+    match proof with
+      | TrueScoped _ => True
+      | FalseScoped _ => False
+      | ImpliesScoped l r  =>forall _ : (semant l), (semant r)
+      | AndScoped l r => and  (semant l) (semant r)
+      | OrScoped l r => or (semant l) (semant r)
+      |@Foas.ForallScoped _ store value H => forall arg, semant (H arg)
+      | CmpScoped comparison l r => (semant_Relop comparison) (PL.interp l) (PL.interp r) 
     end.
      
      
@@ -376,7 +384,7 @@ Inductive prop (A : Set) : Set :=
   
   
   Definition Reader (R A : Set) : Set := R->A.
-  Definition IntReader (A : Set) : Set := Reader Z A.
+  Definition NatReader (A : Set) : Set := Reader nat A.
   
   (*Class Monad (M : Set->Set) : Set:=
   {
@@ -384,17 +392,17 @@ Inductive prop (A : Set) : Set :=
   bind : forall {A B}, M A -> (A -> M B) -> M B
   }.*)
   
-  Definition ret (A:Set) (a:A) : IntReader A := fun i => a.
-  Definition bind (A B:Set) (m : IntReader A) (k : A->IntReader B) : IntReader B :=
+  Definition ret (A:Set) (a:A) : NatReader A := fun i => a.
+  Definition bind (A B:Set) (m : NatReader A) (k : A->NatReader B) : NatReader B :=
   fun r => k (m r) r.
-  Definition ask :(IntReader Z) := fun i => i.
+  Definition ask :(NatReader nat) := fun i => i.
   
   Definition local (A B :Set) (g: B->B) (f : Reader B A): (Reader B A) := fun i => f (g i).
   
   
   
 
-  Instance reader_valueAlgebra : PL.ValueAlgebra (Z -> PL.Exp) :=
+  Instance reader_valueAlgebra : PL.ValueAlgebra (nat -> PL.Exp) :=
   {
   lit i:= ret (PL.Lit i);
   add x y := bind x (fun v1 => 
@@ -437,8 +445,6 @@ Inductive prop (A : Set) : Set :=
      
      
      
-     (*there is something fishy about the Forall case. I should pass the arg into the recursive call, but i don't know if this is done implicitely by H or not. I don't know which values for name and value are picked in H*)
-     
      
      
      
@@ -459,7 +465,7 @@ Inductive prop (A : Set) : Set :=
      end .
      Search (Z->nat).
      
-   Fixpoint phoas_to_foas_reader (r : Phoas.prop (IntReader PL.Exp)) : IntReader Foas.prop :=
+   Fixpoint phoas_to_foas_reader (r : Phoas.prop (NatReader PL.Exp)) : NatReader Foas.prop :=
    match r with
     | T _ => ret Foas.T
     | F _=> ret Foas.F
@@ -478,17 +484,17 @@ Inductive prop (A : Set) : Set :=
                       bind (phoas_to_foas_reader r) (fun r2 =>
                       ret (Foas.Or r1 r2)))
     | Forall f => bind ask (fun i => 
-                  bind (local (fun i=>Z.add i 1) (phoas_to_foas_reader (f (ret (PL.Var ( Z.to_nat i))))) ) ) (fun body =>
+                  bind (local (fun i=>Nat.add i 1) (phoas_to_foas_reader (f (fun j => PL.Var (j - (i+1))))) ) (fun body =>
                   
                   
                   
-                  (ret (Foas.Forall ( (Z.to_nat i)) body)))
+                  (ret (Foas.Forall body))))
     
    
    end.
    Search (nat->Z).
-   Fixpoint phoas_to_foas (phoasProp : Phoas.prop (IntReader PL.Exp)) : Foas.prop :=
-   (phoas_to_foas_reader phoasProp) (Z.of_nat 0).
+   Fixpoint phoas_to_foas (phoasProp : Phoas.prop (NatReader PL.Exp)) : Foas.prop :=
+   (phoas_to_foas_reader phoasProp) 0.
    
    
    
@@ -497,28 +503,30 @@ Inductive prop (A : Set) : Set :=
    
    Definition WellScopedProp2 : list string->Foas.prop -> Prop. Admitted.
   
-   Definition simpleProp : Foas.prop  := Foas.Forall "x" (Foas.Implies (Foas.Cmp SmallerThan (PL.Lit 1%Z) (PL.Var "x"))(Foas.Cmp SmallerThan (PL.Lit 0%Z) (PL.Var "x"))).
+   Definition simpleProp : Foas.prop  := Foas.Forall  (Foas.Implies (Foas.Cmp SmallerThan (PL.Lit 1%Z) (PL.Var 0))(Foas.Cmp SmallerThan (PL.Lit 0%Z) (PL.Var 0))).
      
      
      
-     Lemma simplePropScoped : WellScopedProp2 nil simpleProp.
+  Lemma simplePropScoped (V:Set): Foas.WellScopedProp  (nil:debruijnmap.debruijnmap V) simpleProp.
      Proof.
      unfold simpleProp.
      eapply Foas.ForallScoped.
+     intros.
      eapply Foas.ImpliesScoped.
      + eapply Foas.CmpScoped .
       - eapply PL.LitScoped.
-      - eapply PL.VarScoped.
-        eapply listmap.insert_implies_contains. eauto.
+      - eapply PL.VarScoped. eapply  debruijnmap.insert_implies_contains. 
      + eapply Foas.CmpScoped. 
        - eapply PL.LitScoped.
        - eapply PL.VarScoped.
-        eapply listmap.insert_implies_contains. eauto.
-     Unshelve.
-     auto.
+        eapply debruijnmap.insert_implies_contains. 
      Qed.
      
-     Compute phoas_to_foas (foas_to_phoas reader_valueAlgebra simplePropScoped).
+     Compute phoas_to_foas (foas_to_phoas reader_valueAlgebra (@simplePropScoped (NatReader PL.Exp))).
+     Compute (Foas.semant (simplePropScoped PL.value)).
+
+     Lemma simplePropTrue : (Foas.semant (simplePropScoped PL.value)).
+     
    
    
 End Phoas.
