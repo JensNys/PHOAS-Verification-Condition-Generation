@@ -403,11 +403,11 @@ Module Phoas.
 Inductive prop (A : Set) : Set :=
   | T
   | F
-  | Cmp (r:Relop) (a : A) (b:A)
   | Implies (l : prop A) (r : prop A)
   | And (l : prop A) (r : prop A)
   | Or (l : prop A) (r : prop A)
-  | Forall (f : A ->  prop A).
+  | Forall (f : A ->  prop A)
+  | Cmp (r:Relop) (a : A) (b:A).
   
   
   
@@ -477,11 +477,6 @@ Inductive prop (A : Set) : Set :=
      
      
      
-     
-     
-     
-     
-     
       
      
      
@@ -525,10 +520,68 @@ Inductive prop (A : Set) : Set :=
    
    end.
    Search (nat->Z).
-   Fixpoint phoas_to_foas (phoasProp : Phoas.prop (NatReader PL.Exp)) : Foas.prop :=
+
+
+   Definition phoas_to_foas (phoasProp : Phoas.prop (NatReader PL.Exp)) : Foas.prop :=
    (phoas_to_foas_reader phoasProp) 0.
-   
-   
+
+   Definition rwPhoasToFoas : forall p, phoas_to_foas p = (phoas_to_foas_reader p) 0.
+  intros. reflexivity. 
+
+  Hint Constructors Foas.WellScopedProp : core. 
+  Hint Constructors PL.WellScopedExp : core.
+
+
+
+  (*i <= length s  is not strong enough *)
+  Definition PhoasReaderWellScoped : forall  p s i, i <= length s -> @Foas.WellScopedProp (NatReader PL.Exp) s ((phoas_to_foas_reader p) i ).
+  intros.
+  
+  (*automatically handle all uninteresting cases (eauto for true and false, second try for binary propositions (implies, and, or))*)
+  induction p;try(eauto); try(simpl;unfold bind; unfold ret; eauto; try(apply IHp1);try(apply IHp2)).
+  + eapply Foas.ForallScoped. unfold local. unfold ask. simpl. admit.
+  
+  
+  
+  + eapply Foas.CmpScoped.
+    - induction a;try(eauto).
+      eapply PL.VarScoped.
+      unfold debruijnmap.contains.
+      admit. (*We don't have enough information to prove this. We don't have any information about x*)
+     
+
+
+  
+
+
+
+  + unfold phoas_to_foas in IHp1. fold (phoas_to_foas p1). unfold phoas_to_foas in *.
+fold (phoas_to_foas_reader p1 0). change (phoas_to_foas_reader p1 0) with (phoas_to_foas p1).  simpl in IHp1. exact IHp1. simpl in IHp1. eapply IHp1. simpl in *.  unfold phoas_to_foas.
+  eapply IHp1.
+   unfold phoas_to_foas in IHp1.
+  eauto.  unfold phoas_to_foas_reader. simpl.   eauto.
+  
+  
+  Definition PhoasWellScoped : forall  p, @Foas.WellScopedProp (NatReader PL.Exp) nil (phoas_to_foas p).
+  
+  intros.
+  assert (H : @length (NatReader PL.Exp) [] = 0).
+{ apply length_nil. }
+
+  assert (0 <= @length (NatReader PL.Exp) []).
+  { rewrite H. apply (Nat.le_refl 0). }
+  
+ 
+  apply (PhoasReaderWellScoped p nil H0).
+  Defined.
+
+
+ 
+  (*
+  
+*)
+     
+     
    
    
    (* tbcCheck phoas_to_foas (Foas.foas_to_phoas simplePropScoped). *)
