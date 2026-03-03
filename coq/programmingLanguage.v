@@ -11,8 +11,8 @@ Require Import Coq.Strings.String.
 Require Import Coq.Numbers.DecimalString.
 Require Import Coq.Numbers.DecimalZ.
 Require Import stdpp.gmap.
-From stdpp Require Import options.
 
+From stdpp Require Import options.
 From Coq Require Import Program.Basics.
 Local Open Scope program_scope.
 
@@ -525,8 +525,8 @@ Inductive prop (A : Set) : Set :=
    Definition phoas_to_foas (phoasProp : Phoas.prop (NatReader PL.Exp)) : Foas.prop :=
    (phoas_to_foas_reader phoasProp) 0.
 
-   Definition rwPhoasToFoas : forall p, phoas_to_foas p = (phoas_to_foas_reader p) 0.
-  intros. reflexivity. 
+   (* Definition rwPhoasToFoas : forall p, phoas_to_foas p = (phoas_to_foas_reader p) 0.
+  intros. reflexivity.  *)
 
   Hint Constructors Foas.WellScopedProp : core. 
   Hint Constructors PL.WellScopedExp : core.
@@ -548,18 +548,22 @@ Inductive prop (A : Set) : Set :=
       eapply PL.VarScoped.
       unfold debruijnmap.contains.
       admit. (*We don't have enough information to prove this. We don't have any information about x*)
+    - induction b;try(eauto).
+      eapply PL.VarScoped.
+      unfold debruijnmap.contains.
+      admit. (*We don't have enough information to prove this. We don't have any information about x*)
      
 
-
+Admitted.
   
 
 
 
-  + unfold phoas_to_foas in IHp1. fold (phoas_to_foas p1). unfold phoas_to_foas in *.
+(*  + unfold phoas_to_foas in IHp1. fold (phoas_to_foas p1). unfold phoas_to_foas in *.
 fold (phoas_to_foas_reader p1 0). change (phoas_to_foas_reader p1 0) with (phoas_to_foas p1).  simpl in IHp1. exact IHp1. simpl in IHp1. eapply IHp1. simpl in *.  unfold phoas_to_foas.
   eapply IHp1.
    unfold phoas_to_foas in IHp1.
-  eauto.  unfold phoas_to_foas_reader. simpl.   eauto.
+  eauto.  unfold phoas_to_foas_reader. simpl.   eauto.*)
   
   
   Definition PhoasWellScoped : forall  p, @Foas.WellScopedProp (NatReader PL.Exp) nil (phoas_to_foas p).
@@ -634,20 +638,20 @@ End Phoas.
 
 Section constraintGeneration.
 
-  Definition Wstore (V A:Set) := (A -> listmap.string_map V -> Phoas.prop V) -> listmap.string_map V -> Phoas.prop V.
+  Definition Wstore (V A:Set) := (A -> debruijnmap.debruijnmap V -> Phoas.prop V) -> debruijnmap.debruijnmap V -> Phoas.prop V.
   Definition ret (V A:Set) (a:A) : Wstore V A := fun post store => post a store.
   Definition bind (V A B:Set) (c : Wstore V A) (k : A->Wstore V B) : Wstore V B :=
   fun post store1 => c (fun a store2 => (k a) post store2) store1.
   
-  Definition lookupWstore (V : Set)  (varname : string) : Wstore V V :=
-  fun post store => match (listmap.lookup varname store) with 
+  Definition lookupWstore (V : Set)  (varname : nat) : Wstore V V :=
+  fun post store => match (debruijnmap.lookup varname store) with 
                         | None => Phoas.F V
                         | Some value => post value store
                     end.
-  Definition insertWstore (V : Set)  (varname : string) (v:V) : Wstore V unit  :=
-  fun post store => post tt (listmap.insert varname v store).
-  Definition deleteWstore (V : Set)  (varname : string) : Wstore V unit  :=
-  fun post store => post tt (listmap.delete varname store).
+  Definition insertWstore (V : Set)  (varname : nat) (v:V) : Wstore V unit  :=
+  fun post store => post tt (debruijnmap.insert v store).
+  Definition deleteWstore (V : Set)  (varname : nat) : Wstore V unit  :=
+  fun post store => post tt (debruijnmap.delete varname store).
   
   
   Fixpoint exec_exp (V:Set) (VA : PL.ValueAlgebra V) (e : PL.Exp) : (Wstore V V):= 
@@ -665,13 +669,13 @@ Section constraintGeneration.
   Fixpoint exec_stm (V:Set) (VA : PL.ValueAlgebra V) (stm : PL.Stm) : (Wstore V V):= 
   match stm with
   | PL.Expr e => exec_exp VA e
-  | PL.Let var e body => bind (exec_exp VA e)      (fun  x =>
+  | PL.Let e body => bind (exec_exp VA e)      (fun  x =>
                          bind (insertWstore var x) (fun _ =>
                          bind (exec_stm VA body)      (fun result =>
                          bind (deleteWstore var)   (fun _ =>
                          ret result
                          
-                         ))))
+                         )))) (*push and pop*)
   end.
   
   Definition wp (V:Set) (VA : PL.ValueAlgebra V) (stm : PL.Stm) (post : V -> listmap.string_map V -> Phoas.prop V)  (initStore : listmap.string_map V) : Phoas.prop V :=
@@ -717,7 +721,7 @@ Section constraintGeneration.
   
   
   Lemma adequacy (contract:Foas.Contract) : 
-  Foas.semant nil (vc_foas contract) -> adequate contract. 
+  Foas.semant nil (vc_foas contract) -> contract_semant contract. 
    
   
   (*
