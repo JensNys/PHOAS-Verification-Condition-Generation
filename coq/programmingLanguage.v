@@ -15,6 +15,8 @@ Require Import stdpp.gmap.
 From stdpp Require Import options.
 From Coq Require Import Program.Basics.
 Local Open Scope program_scope.
+From stdpp Require Import
+  gmap mapset option stringmap.
 
 Set Implicit Arguments.
 
@@ -44,10 +46,10 @@ Definition insert (A : Set)  (v : A) (store : debruijnmap A) : debruijnmap A :=
   Definition double (A : Set) (v1 : A)  (v2 : A)  : debruijnmap A :=
   v1:: v2 :: nil.
   
-Fixpoint delete (A : Set) (k : nat)  (store : debruijnmap A) : debruijnmap A :=
+Fixpoint delete (A : Set)  (store : debruijnmap A) : debruijnmap A :=
   match store with
         | nil => nil
-        | v :: rest => if ( Nat.eqb k 0) then rest else (v) :: (delete (k-1) rest)
+        | v :: rest =>   rest
   end.
   
   
@@ -178,15 +180,15 @@ End listmap.
 Module PL.
 Definition value := Z.
 (*Definition eval_store := listmap.string_map value.*)
-Inductive Exp  : Set :=
-  | Lit (n : value)
-  | Var (x : nat)
-  | Add (e1 e2 : Exp).
+Inductive Exp : Set :=
+| Lit (n : Z)
+| Var (x : string)
+| Add (e1 e2 : Exp).
   
   
 Inductive Stm : Set :=
   | Expr (e : Exp)
-  | Let (e : Exp) (body:Stm).
+  | Let (var:string) (e : Exp) (body:Stm).
 Inductive Prog : Set :=
   | Fun (functionName : string) (param : string) (body : Stm).
   
@@ -217,25 +219,32 @@ Since a contract and it postcondition makes a statement about terminating progra
 therefore in our case i don't think we have a need for a small-step semantics. *)
 
 (* big step semantics for expressions*)
-Inductive evalExp  :  Exp -> debruijnmap.debruijnmap value -> value ->Prop :=
-  | EvalLit : forall n store, evalExp (Lit n) store (  n)
-  | EvalVar : forall x store v,  debruijnmap.lookup x store = Some v -> evalExp (Var x) store v
-  | EvalAdd : forall store a b v1 v2, evalExp a store v1 -> evalExp b store v2 -> evalExp (Add a b) store (Z.add v1 v2).
+Inductive evalExp (store : stringmap value) :  Exp -> value ->Prop :=
+  | EvalLit : forall n , evalExp store (Lit n) n  
+  | EvalVar : forall x  v,  lookup x store = Some v -> evalExp store (Var x)  v
+  | EvalAdd : forall a b v1 v2, evalExp store a v1 -> evalExp store b  v2 -> evalExp store (Add a b)  (Z.add v1 v2).
   
 (*big step semantics for statements*)
-Inductive evalStm :  Stm -> debruijnmap.debruijnmap value -> (value * debruijnmap.debruijnmap value)->Prop :=
-  | EvalExpr : forall mv e store, evalExp e store mv -> evalStm  (Expr e) store (mv,store)
-  | EvalLetSucces  : forall e body store store' result v, evalExp  e store (v) -> evalStm   body (debruijnmap.insert v store) (result,store')-> evalStm  (Let e body) store (result,store') .
+Inductive evalStm (store : stringmap value) :  Stm  -> (value * stringmap value)->Prop :=
+  | EvalExpr : forall mv e, evalExp store e  mv -> evalStm store (Expr e)  (mv,store)
+  | EvalLetSucces  : forall x e body store' result v, evalExp store e (v) -> evalStm (insert x v store)  body (result,store')-> evalStm store (Let x e body)  (result, delete x store') .
   
+
+Inductive wfexp (Γ : stringset) : Exp -> Type :=
+| WfLit n :
+  wfexp Γ (Lit n)
+| WfVar x :
+  x ∈ Γ ->
+  wfexp Γ (Var x)
+| WfAdd e1 e2 :
+  wfexp Γ e1 ->
+  wfexp Γ e2 ->
+  wfexp Γ (Add e1 e2).
+
+
+
   
-  Inductive WellScopedExp (V:Set) : debruijnmap.debruijnmap V->Exp->Type :=
-  | LitScoped :  forall store n, WellScopedExp store (Lit n)
-  | VarScoped : forall store x, debruijnmap.contains store x-> WellScopedExp store (Var x)
-  |AddScoped : forall store e1 e2, WellScopedExp store e1->WellScopedExp store e2 -> WellScopedExp store (Add e1 e2).
-  
-  
-  
-  Check listmap.contains_implies_lookup_some.
+  (*
   Fixpoint interp  (s: debruijnmap.debruijnmap value) (e : Exp) (proof : WellScopedExp s e) : value :=
     match proof with
       |LitScoped _ n => n
@@ -245,15 +254,41 @@ Inductive evalStm :  Stm -> debruijnmap.debruijnmap value -> (value * debruijnma
                                        end
       | AddScoped  H1 H2=> Z.add (interp H1) (interp H2)
     end.
-    Fixpoint interp_to_va (V : Set) (VA: ValueAlgebra V) (s:debruijnmap.debruijnmap V) (e : Exp) (proof : WellScopedExp s e) : V :=
+
+    
+    
+  *)
+  Search stringmap.
+  Search stringset.
+  Check elem_of_dom.
+
+  (*als ik een store heb en x \in (dom store) -> exists y: some y = lookup x store*)
+  Definition contains_implies_lookup (V : Set) (store : stringmap V)  : forall x, x ∈ (dom store) -> {y | lookup x store = Some y}.
+  Proof.
+intros x H.
+  apply elem_of_dom in H.
+  (* H : is_Some (store !! x) *)
+  unfold is_Some in H.
+  (* Now case split on the actual map lookup *)
+  destruct (lookup x store) as [y|] eqn:Heq.
+  - exists y. reflexivity.
+  - exfalso. destruct H as [y Hy]. congruence.
+  
+  Defined.
+
+
+
+
+  Fixpoint interp_to_va (V : Set) (VA: ValueAlgebra V) (store:stringmap V) (e : Exp) (proof : wfexp (dom store) e) : V :=
     match proof with
-      |LitScoped _ n => lit n
+      |WfLit _ n => lit n
       
-      |VarScoped contains_proof => match (debruijnmap.contains_implies_lookup_some contains_proof) with
+      |WfVar contains_proof => match (contains_implies_lookup store contains_proof) with
                                           | exist _ v H => v
                                        end
-      | AddScoped H1 H2=> add (interp_to_va VA H1) (interp_to_va VA H2)
+      | WfAdd H1 H2=> add (interp_to_va VA store H1) (interp_to_va VA store H2)
     end.
+  
   
                                            
     
@@ -290,14 +325,36 @@ Inductive Relop : Set :=
 
 Module Foas.
 
-Inductive prop : Set :=
+ Inductive prop : Set :=
   | T
   | F
-  | Cmp (r:Relop) (a : PL.Exp) (b:PL.Exp)
+  | Cmp (r:Relop) (a b : PL.Exp)
   | Implies (l : prop) (r : prop)
   | And (l : prop) (r : prop)
   | Or (l : prop) (r : prop)
-  | Forall (p :  prop).
+  | Forall (x : string) (p :  prop).
+
+  Inductive wfprop (Γ : stringset) : prop -> Prop :=
+    | WfT : wfprop Γ T
+    | WfF: wfprop Γ F
+    | WfCmp c l r :
+      PL.wfexp Γ l ->
+      PL.wfexp Γ r ->
+      wfprop Γ (Cmp c l r)
+    | WfImplies l r : wfprop Γ l->wfprop Γ r->wfprop Γ (Implies l r)
+    | WfAnd l r : wfprop Γ l->wfprop Γ r->wfprop Γ (And l r)
+    | WfOr l r : wfprop Γ l->wfprop Γ r->wfprop Γ (Or l r)
+    | WfForall (x : string) (body : prop) :
+    wfprop (union Γ (singleton x)) body ->
+    wfprop Γ (Foas.Forall x body).
+    
+    
+    (*
+    | WfForall  : forall (body : prop), (forall (x : string),
+      wfprop (union Γ (singleton x)) body ->
+      wfprop Γ (Foas.Forall x body)).
+    *)
+    
   
   
   
@@ -318,22 +375,12 @@ Inductive prop : Set :=
     
     end.
     
-    Inductive WellScopedProp (V : Set) : debruijnmap.debruijnmap V->Foas.prop->Type :=
-     |TrueScoped : forall store, WellScopedProp store T
-     |FalseScoped: forall store, WellScopedProp store F
-     |ImpliesScoped: forall store l r, WellScopedProp store l->WellScopedProp store r->WellScopedProp store (Implies l r)
-     |AndScoped :  forall store l r, WellScopedProp store l->WellScopedProp store r->WellScopedProp store (And l r)
-     |OrScoped :  forall store l r, WellScopedProp store l->WellScopedProp store r->WellScopedProp store (Or l r)
-     |ForallScoped : forall store body, 
-      (forall (v : V), WellScopedProp (debruijnmap.insert v store) body) -> 
-      WellScopedProp store (Foas.Forall body)
-     |CmpScoped: forall c l r store, PL.WellScopedExp store l-> PL.WellScopedExp store r-> WellScopedProp store (Cmp c l r).
-    
+   
     
     (*this states falsely that everything is well_scoped*)
     
-     
-    Fixpoint semant (s:debruijnmap.debruijnmap PL.value) (p : Foas.prop) (proof : WellScopedProp s p)  : Prop :=
+     (*
+     Fixpoint semant (s:debruijnmap.debruijnmap PL.value) (p : Foas.prop) (proof : WellScopedProp s p)  : Prop :=
     match proof with
       | TrueScoped _ => True
       | FalseScoped _ => False
@@ -343,6 +390,8 @@ Inductive prop : Set :=
       |@Foas.ForallScoped _ _ _ H => forall arg, semant (H arg)
       | CmpScoped comparison l r => (semant_Relop comparison) (PL.interp l) (PL.interp r) 
     end.
+     *)
+    
 
 
     
@@ -410,11 +459,27 @@ Inductive prop (A : Set) : Set :=
   | Cmp (r:Relop) (a : A) (b:A).
   
   
+  Section WithA.
+
+    Variable (A : Set).
+    Variable (WA : stringset -> A -> Prop).
+
+    Inductive wfprop (Γ : stringset) : prop A -> Prop :=
+    | WfT : wfprop Γ (T A)
+    | WfF : wfprop Γ (F A)
+    | WfImplies {l r} : wfprop Γ l -> wfprop Γ r -> wfprop Γ (Implies l r)
+    | WfAnd {l r} : wfprop Γ l -> wfprop Γ r -> wfprop Γ (And l r)
+    | WfOr {l r} : wfprop Γ l -> wfprop Γ r -> wfprop Γ (Or l r)
+    | WfForall {f : A -> prop A} :
+        (forall (a : A) Γ', subseteq Γ Γ' -> WA Γ' a -> wfprop Γ' (f a)) ->
+        wfprop Γ (Forall f)
+    | WfCmp {r : Relop} {a b : A} : WA Γ a -> WA Γ b -> wfprop Γ (Cmp r a b).
+
+  End WithA.
   
   
   
-  
-  
+  (*
   Definition Reader (R A : Set) : Set := R->A.
   Definition NatReader (A : Set) : Set := Reader nat A.
   
@@ -431,9 +496,11 @@ Inductive prop (A : Set) : Set :=
   
   Definition local (A B :Set) (g: B->B) (f : Reader B A): (Reader B A) := fun i => f (g i).
   
+  *)
   
   
-
+  
+  (*
   Instance reader_valueAlgebra : PL.ValueAlgebra (nat -> PL.Exp) :=
   {
   lit i:= ret (PL.Lit i);
@@ -441,15 +508,15 @@ Inductive prop (A : Set) : Set :=
              bind y (fun v2 =>
              ret (PL.Add v1 v2)))
   }.
+  *)
+  
   
   Inductive Contract (V:Set) := 
      | ForallC (f: V -> Contract V)
      | HoareTriple (pre : prop V) (program : PL.Prog) (arg:V) (post :V -> prop V).
      
-     Search (Z->string).
      
      
-     Check local.
      
      
      (*
@@ -460,20 +527,34 @@ Inductive prop (A : Set) : Set :=
      |OrScoped :  forall store l r, WellScopedProp store l->WellScopedProp store r->WellScopedProp store (Or l r)
      |ForallScoped: forall store name value body, WellScopedProp (listmap.insert name value store) body -> WellScopedProp store (Forall name body)
      |CmpScoped: forall c l r store, PL.WellScopedExp store l-> PL.WellScopedExp store r-> WellScopedProp store (Cmp c l r).*)
+     (*
      
-     Fixpoint foas_to_phoas (V:Set) (VA: PL.ValueAlgebra V) (env : debruijnmap.debruijnmap V) (foasprop : Foas.prop) (proof : Foas.WellScopedProp env foasprop ) : prop V :=
-     match proof with
-     |Foas.TrueScoped _ => T V
-     |Foas.FalseScoped _ => F V
-     |Foas.ImpliesScoped H1 H2 => Implies (foas_to_phoas VA H1) (foas_to_phoas VA H2)
-     |Foas.AndScoped H1 H2=> And (foas_to_phoas VA H1) (foas_to_phoas VA H2)
-     |Foas.OrScoped H1 H2=> Or (foas_to_phoas VA H1) (foas_to_phoas VA H2)
-     |@Foas.ForallScoped _ store value H => 
-    Forall (fun arg => 
-      foas_to_phoas VA (H arg)
-    )
-     |Foas.CmpScoped cmp H1 H2 => Cmp cmp (PL.interp_to_va VA H1) (PL.interp_to_va VA H2)
-     end. 
+     
+     *)
+     Check Foas.WfForall.
+     
+
+     Search dom.
+    Lemma variable_introduction_both :forall (V:Set) (store : stringmap V) x arg, (dom store ∪ {[x]}) = (dom (<[x:=arg]> store)) .
+    Proof.
+    intros.
+    rewrite dom_insert_L. 
+    set_solver.
+    Qed.
+  
+
+    Fixpoint foas_to_phoas (V:Set) (VA: PL.ValueAlgebra V) (store : stringmap V) (foasprop : Foas.prop) (proof : Foas.wfprop (dom store) foasprop ) : prop V :=
+    match proof with
+    |Foas.WfT _ => T V
+    |Foas.WfF _ => F V
+    |Foas.WfImplies H1 H2 => Implies (foas_to_phoas VA store H1) (foas_to_phoas VA store H2)
+    |Foas.WfAnd H1 H2=> And (foas_to_phoas VA store H1) (foas_to_phoas VA store H2)
+    |Foas.WfOr H1 H2=> Or (foas_to_phoas VA store H1) (foas_to_phoas VA store H2)
+    |@Foas.WfForall _ x body H => 
+  Forall (fun arg => foas_to_phoas VA (insert x arg store) H)  (* H is now about (union set (singleton x) *)
+    |Foas.WfCmp cmp H1 H2 => Cmp cmp (PL.interp_to_va VA store H1) (PL.interp_to_va VA store H2)
+    end. 
+     
      
      
      
@@ -483,101 +564,60 @@ Inductive prop (A : Set) : Set :=
      
      
      
-     Fixpoint foas_to_phoas_admitted (V:Set) (env : listmap.string_map V) (foasprop : Foas.prop) : prop V. Admitted.
      
+    
      
-     Definition foas_contract_to_phoas_contract (V : Set) (env : listmap.string_map V) (foas_contract : Foas.Contract) : Contract V :=
+
+  Definition R (A : Set) : Set := stringset -> A.
+
+  Fixpoint p2f (Γ : stringset) (p : Phoas.prop (R PL.Exp)) : Foas.prop :=
+    match p with
+    | Phoas.T _ => Foas.T
+    | Phoas.F _ => Foas.F
+    | Phoas.Implies l r => Foas.Implies (p2f Γ l) (p2f Γ r)
+    | Phoas.And l r => Foas.And (p2f Γ l) (p2f Γ r)
+    | Phoas.Or l r => Foas.Or (p2f Γ l) (p2f Γ r)
+    | Phoas.Forall f =>
+        let x := fresh_string_of_set "" Γ in
+        Foas.Forall x
+          (p2f (union Γ (singleton x))
+             (f (fun _ => PL.Var x)))
+    | Phoas.Cmp r a b => Foas.Cmp r (a Γ) (b Γ)
+    end.
+
+  Definition wfr (Γ : stringset) (m : R PL.Exp) : Prop :=
+    PL.wfexp Γ (m Γ).
+
+  Lemma wfp2f (Γ : stringset) (p : Phoas.prop (R PL.Exp)) (wfp : Phoas.wfprop wfr Γ p) :
+    Foas.wfprop Γ (p2f Γ p).
+  Proof.
+    induction wfp; cbn.
+    - constructor.
+    - constructor.
+    - constructor; auto.
+    - constructor; auto.
+    - constructor; auto.
+    - constructor.
+      apply H0.
+      + set_solver.
+      + 
+      constructor.
+      set_solver.
+    - constructor; auto.
+  Qed.
+
+  (*
+  Definition foas_contract_to_phoas_contract (V : Set) (env : listmap.string_map V) (foas_contract : Foas.Contract) : Contract V :=
      match foas_contract with
       | Foas.MkContract forallVar pre prog  arg result post => ForallC (fun v => HoareTriple (foas_to_phoas_admitted (listmap.singleton forallVar v) pre) prog v (fun r => foas_to_phoas_admitted (listmap.double forallVar v result r) post) )
      end .
-     Search (Z->nat).
-     
-   Fixpoint phoas_to_foas_reader (r : Phoas.prop (NatReader PL.Exp)) : NatReader Foas.prop :=
-   match r with
-    | T _ => ret Foas.T
-    | F _=> ret Foas.F
-    | Cmp op l r => bind l (fun v1  => 
-                    bind r (fun v2 =>
-                    ret (Foas.Cmp op v1 v2)))
-    | Implies p1 p2 =>bind (phoas_to_foas_reader p1) (fun r1 =>
-                      bind (phoas_to_foas_reader p2) (fun r2 =>
-                      ret (Foas.Implies r1 r2)))
-    
-    
-    | And l r =>bind (phoas_to_foas_reader l) (fun r1 =>
-                      bind (phoas_to_foas_reader r) (fun r2 =>
-                      ret (Foas.And r1 r2)))
-    | Or l r =>bind (phoas_to_foas_reader l) (fun r1 =>
-                      bind (phoas_to_foas_reader r) (fun r2 =>
-                      ret (Foas.Or r1 r2)))
-    | Forall f => bind ask (fun i => 
-                  bind (local (fun i=>Nat.add i 1) (phoas_to_foas_reader (f (fun j => PL.Var (j - (i+1))))) ) (fun body =>
-                  
-                  
-                  
-                  (ret (Foas.Forall body))))
-    
+  *)
    
-   end.
-   Search (nat->Z).
-
-
-   Definition phoas_to_foas (phoasProp : Phoas.prop (NatReader PL.Exp)) : Foas.prop :=
-   (phoas_to_foas_reader phoasProp) 0.
 
    (* Definition rwPhoasToFoas : forall p, phoas_to_foas p = (phoas_to_foas_reader p) 0.
   intros. reflexivity.  *)
 
-  Hint Constructors Foas.WellScopedProp : core. 
-  Hint Constructors PL.WellScopedExp : core.
 
-
-
-  (*i <= length s  is not strong enough *)
-  Definition PhoasReaderWellScoped : forall  p s i, i <= length s -> @Foas.WellScopedProp (NatReader PL.Exp) s ((phoas_to_foas_reader p) i ).
-  intros.
-  
-  (*automatically handle all uninteresting cases (eauto for true and false, second try for binary propositions (implies, and, or))*)
-  induction p;try(eauto); try(simpl;unfold bind; unfold ret; eauto; try(apply IHp1);try(apply IHp2)).
-  + eapply Foas.ForallScoped. unfold local. unfold ask. simpl. admit.
-  
-  
-  
-  + eapply Foas.CmpScoped.
-    - induction a;try(eauto).
-      eapply PL.VarScoped.
-      unfold debruijnmap.contains.
-      admit. (*We don't have enough information to prove this. We don't have any information about x*)
-    - induction b;try(eauto).
-      eapply PL.VarScoped.
-      unfold debruijnmap.contains.
-      admit. (*We don't have enough information to prove this. We don't have any information about x*)
-     
-
-Admitted.
-  
-
-
-
-(*  + unfold phoas_to_foas in IHp1. fold (phoas_to_foas p1). unfold phoas_to_foas in *.
-fold (phoas_to_foas_reader p1 0). change (phoas_to_foas_reader p1 0) with (phoas_to_foas p1).  simpl in IHp1. exact IHp1. simpl in IHp1. eapply IHp1. simpl in *.  unfold phoas_to_foas.
-  eapply IHp1.
-   unfold phoas_to_foas in IHp1.
-  eauto.  unfold phoas_to_foas_reader. simpl.   eauto.*)
-  
-  
-  Definition PhoasWellScoped : forall  p, @Foas.WellScopedProp (NatReader PL.Exp) nil (phoas_to_foas p).
-  
-  intros.
-  assert (H : @length (NatReader PL.Exp) [] = 0).
-{ apply length_nil. }
-
-  assert (0 <= @length (NatReader PL.Exp) []).
-  { rewrite H. apply (Nat.le_refl 0). }
-  
- 
-  apply (PhoasReaderWellScoped p nil H0).
-  Defined.
 
 
  
@@ -590,41 +630,50 @@ fold (phoas_to_foas_reader p1 0). change (phoas_to_foas_reader p1 0) with (phoas
    
    (* tbcCheck phoas_to_foas (Foas.foas_to_phoas simplePropScoped). *)
    
-   Definition WellScopedProp2 : list string->Foas.prop -> Prop. Admitted.
   
-   Definition simpleProp : Foas.prop  := Foas.Forall  (Foas.Implies (Foas.Cmp SmallerThan (PL.Lit 1%Z) (PL.Var 0))(Foas.Cmp SmallerThan (PL.Lit 0%Z) (PL.Var 0))).
+   Definition simpleProp : Foas.prop  := Foas.Forall "x" (Foas.Implies (Foas.Cmp SmallerThan (PL.Lit 1%Z) (PL.Var "x"))(Foas.Cmp SmallerThan (PL.Lit 0%Z) (PL.Var "x"))).
      
      
      
-  Definition simplePropScoped (V:Set): Foas.WellScopedProp  (nil:debruijnmap.debruijnmap V) simpleProp.
+  Definition simplePropScoped (V:Set): Foas.wfprop  ∅ simpleProp.
      Proof.
      unfold simpleProp.
-     eapply Foas.ForallScoped.
+     constructor.
      intros.
-     eapply Foas.ImpliesScoped.
-     + eapply Foas.CmpScoped.
-      - eapply PL.LitScoped.
-      - eapply PL.VarScoped. eapply  debruijnmap.insert_implies_contains. 
-     + eapply Foas.CmpScoped. 
-       - eapply PL.LitScoped.
-       - eapply PL.VarScoped.
-        eapply debruijnmap.insert_implies_contains. 
+     constructor.
+     + constructor.
+      - constructor.
+      - constructor. set_solver.
+     + constructor.
+      - constructor.
+      - constructor. set_solver.
      Defined.
      
      Compute phoas_to_foas (foas_to_phoas reader_valueAlgebra (@simplePropScoped (NatReader PL.Exp))).
      Compute (Foas.semant (simplePropScoped PL.value)).
      Compute simpleProp.
-
-
      
-     Set Printing Implicit.
-
+     
      Definition simplePropTrue : @Foas.semant nil simpleProp (simplePropScoped PL.value).
      Proof.
       simpl. 
       (*now we see the verification condition as it should be.*)
       lia.
      Qed.
+     
+     
+     Definition simplePropInverse : phoas_to_foas (foas_to_phoas reader_valueAlgebra (@simplePropScoped (NatReader PL.Exp))) = simpleProp.
+     Proof.
+     unfold phoas_to_foas.
+     simpl.
+     
+     Admitted.
+
+
+     
+     Set Printing Implicit.
+
+     
 
    
 End Phoas.
@@ -650,8 +699,8 @@ Section constraintGeneration.
                     end.
   Definition insertWstore (V : Set)  (varname : nat) (v:V) : Wstore V unit  :=
   fun post store => post tt (debruijnmap.insert v store).
-  Definition deleteWstore (V : Set)  (varname : nat) : Wstore V unit  :=
-  fun post store => post tt (debruijnmap.delete varname store).
+  Definition deleteWstore (V : Set)   : Wstore V unit  :=
+  fun post store => post tt (debruijnmap.delete  store).
   
   
   Fixpoint exec_exp (V:Set) (VA : PL.ValueAlgebra V) (e : PL.Exp) : (Wstore V V):= 
@@ -670,9 +719,9 @@ Section constraintGeneration.
   match stm with
   | PL.Expr e => exec_exp VA e
   | PL.Let e body => bind (exec_exp VA e)      (fun  x =>
-                         bind (insertWstore var x) (fun _ =>
+                         bind (insertWstore x) (fun _ =>
                          bind (exec_stm VA body)      (fun result =>
-                         bind (deleteWstore var)   (fun _ =>
+                         bind (deleteWstore)   (fun _ =>
                          ret result
                          
                          )))) (*push and pop*)
