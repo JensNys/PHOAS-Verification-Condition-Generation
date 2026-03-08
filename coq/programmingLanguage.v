@@ -535,12 +535,16 @@ Inductive prop (A : Set) : Set :=
      
 
      Search dom.
-    Lemma variable_introduction_both :forall (V:Set) (store : stringmap V) x arg, (dom store ∪ {[x]}) = (dom (<[x:=arg]> store)) .
+
+
+    Lemma variable_introduction_domain :forall (V:Set) (store : stringmap V) x arg, (dom store ∪ {[x]}) = (dom (<[x:=arg]> store)) .
     Proof.
     intros.
     rewrite dom_insert_L. 
     set_solver.
     Qed.
+
+    
   
 
     Fixpoint foas_to_phoas (V:Set) (VA: PL.ValueAlgebra V) (store : stringmap V) (foasprop : Foas.prop) (proof : Foas.wfprop (dom store) foasprop ) : prop V :=
@@ -551,7 +555,7 @@ Inductive prop (A : Set) : Set :=
     |Foas.WfAnd H1 H2=> And (foas_to_phoas VA store H1) (foas_to_phoas VA store H2)
     |Foas.WfOr H1 H2=> Or (foas_to_phoas VA store H1) (foas_to_phoas VA store H2)
     |@Foas.WfForall _ x body H => 
-  Forall (fun arg => foas_to_phoas VA (insert x arg store) H)  (* H is now about (union set (singleton x) *)
+  Forall (fun arg => @foas_to_phoas V VA (insert x arg store) body H)  (* H is now about (union set (singleton x) *)
     |Foas.WfCmp cmp H1 H2 => Cmp cmp (PL.interp_to_va VA store H1) (PL.interp_to_va VA store H2)
     end. 
      
