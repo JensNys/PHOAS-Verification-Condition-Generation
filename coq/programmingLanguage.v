@@ -18,6 +18,7 @@ Local Open Scope program_scope.
 From stdpp Require Import
   gmap mapset option stringmap.
 
+Import EqNotations.
 Set Implicit Arguments.
 
   
@@ -334,7 +335,7 @@ Module Foas.
   | Or (l : prop) (r : prop)
   | Forall (x : string) (p :  prop).
 
-  Inductive wfprop (Γ : stringset) : prop -> Prop :=
+  Inductive wfprop (Γ : stringset) : prop -> Type :=
     | WfT : wfprop Γ T
     | WfF: wfprop Γ F
     | WfCmp c l r :
@@ -462,9 +463,9 @@ Inductive prop (A : Set) : Set :=
   Section WithA.
 
     Variable (A : Set).
-    Variable (WA : stringset -> A -> Prop).
+    Variable (WA : stringset -> A -> Type).
 
-    Inductive wfprop (Γ : stringset) : prop A -> Prop :=
+    Inductive wfprop (Γ : stringset) : prop A -> Type :=
     | WfT : wfprop Γ (T A)
     | WfF : wfprop Γ (F A)
     | WfImplies {l r} : wfprop Γ l -> wfprop Γ r -> wfprop Γ (Implies l r)
@@ -542,9 +543,10 @@ Inductive prop (A : Set) : Set :=
     intros.
     rewrite dom_insert_L. 
     set_solver.
-    Qed.
+    Defined.
 
-    
+    (*Fixpoint convert_eq (V:Set) (store : stringmap V) (x:string) (arg:V) (a : (dom store ∪ {[x]})) : (dom (<[x:=arg]> store)).
+    *)
   
 
     Fixpoint foas_to_phoas (V:Set) (VA: PL.ValueAlgebra V) (store : stringmap V) (foasprop : Foas.prop) (proof : Foas.wfprop (dom store) foasprop ) : prop V :=
@@ -555,8 +557,8 @@ Inductive prop (A : Set) : Set :=
     |Foas.WfAnd H1 H2=> And (foas_to_phoas VA store H1) (foas_to_phoas VA store H2)
     |Foas.WfOr H1 H2=> Or (foas_to_phoas VA store H1) (foas_to_phoas VA store H2)
     |@Foas.WfForall _ x body H => 
-  Forall (fun arg => @foas_to_phoas V VA (insert x arg store) body H)  (* H is now about (union set (singleton x) *)
-    |Foas.WfCmp cmp H1 H2 => Cmp cmp (PL.interp_to_va VA store H1) (PL.interp_to_va VA store H2)
+  Forall (fun arg => @foas_to_phoas V VA (insert x arg store) body (rew [fun x => Foas.wfprop x body] variable_introduction_domain store x arg  in H)  )
+   |Foas.WfCmp cmp H1 H2 => Cmp cmp (PL.interp_to_va VA store H1) (PL.interp_to_va VA store H2)
     end. 
      
      
@@ -574,26 +576,26 @@ Inductive prop (A : Set) : Set :=
 
   Definition R (A : Set) : Set := stringset -> A.
 
-  Fixpoint p2f (Γ : stringset) (p : Phoas.prop (R PL.Exp)) : Foas.prop :=
+  Fixpoint phoas_to_foas (Γ : stringset) (p : Phoas.prop (R PL.Exp)) : Foas.prop :=
     match p with
     | Phoas.T _ => Foas.T
     | Phoas.F _ => Foas.F
-    | Phoas.Implies l r => Foas.Implies (p2f Γ l) (p2f Γ r)
-    | Phoas.And l r => Foas.And (p2f Γ l) (p2f Γ r)
-    | Phoas.Or l r => Foas.Or (p2f Γ l) (p2f Γ r)
+    | Phoas.Implies l r => Foas.Implies (phoas_to_foas Γ l) (phoas_to_foas Γ r)
+    | Phoas.And l r => Foas.And (phoas_to_foas Γ l) (phoas_to_foas Γ r)
+    | Phoas.Or l r => Foas.Or (phoas_to_foas Γ l) (phoas_to_foas Γ r)
     | Phoas.Forall f =>
         let x := fresh_string_of_set "" Γ in
         Foas.Forall x
-          (p2f (union Γ (singleton x))
+          (phoas_to_foas (union Γ (singleton x))
              (f (fun _ => PL.Var x)))
     | Phoas.Cmp r a b => Foas.Cmp r (a Γ) (b Γ)
     end.
 
-  Definition wfr (Γ : stringset) (m : R PL.Exp) : Prop :=
+  Definition wfr (Γ : stringset) (m : R PL.Exp) : Type :=
     PL.wfexp Γ (m Γ).
 
-  Lemma wfp2f (Γ : stringset) (p : Phoas.prop (R PL.Exp)) (wfp : Phoas.wfprop wfr Γ p) :
-    Foas.wfprop Γ (p2f Γ p).
+  Lemma wfphoas_to_foas (Γ : stringset) (p : Phoas.prop (R PL.Exp)) (wfp : Phoas.wfprop wfr Γ p) :
+    Foas.wfprop Γ (phoas_to_foas Γ p).
   Proof.
     induction wfp; cbn.
     - constructor.
@@ -602,7 +604,7 @@ Inductive prop (A : Set) : Set :=
     - constructor; auto.
     - constructor; auto.
     - constructor.
-      apply H0.
+      apply X.
       + set_solver.
       + 
       constructor.
@@ -639,7 +641,7 @@ Inductive prop (A : Set) : Set :=
      
      
      
-  Definition simplePropScoped (V:Set): Foas.wfprop  ∅ simpleProp.
+  Lemma simplePropScoped (V:Set): Foas.wfprop ∅ simpleProp.
      Proof.
      unfold simpleProp.
      constructor.
