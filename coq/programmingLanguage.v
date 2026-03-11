@@ -502,13 +502,7 @@ Inductive prop (A : Set) : Set :=
   
   
   (*
-  Instance reader_valueAlgebra : PL.ValueAlgebra (nat -> PL.Exp) :=
-  {
-  lit i:= ret (PL.Lit i);
-  add x y := bind x (fun v1 => 
-             bind y (fun v2 =>
-             ret (PL.Add v1 v2)))
-  }.
+  
   *)
   
   
@@ -561,20 +555,29 @@ Inductive prop (A : Set) : Set :=
    |Foas.WfCmp cmp H1 H2 => Cmp cmp (PL.interp_to_va VA store H1) (PL.interp_to_va VA store H2)
     end. 
      
-     
-     
-     
-      
-     
-     
-     
-     
-     
-     
-    
-     
+     Check foas_to_phoas.
 
+
+
+     Check Phoas.wfprop.
+    
+    
+    
+    
+    
   Definition R (A : Set) : Set := stringset -> A.
+  Definition ret (A:Set) (a:A) : R A := fun i => a.
+  Definition bind (A B:Set) (m : R A) (k : A->R B) : R B :=
+     fun r => k (m r) r.
+  
+  Instance R_valueAlgebra : PL.ValueAlgebra (stringset -> PL.Exp) :=
+    {
+    lit i:= ret (PL.Lit i);
+    add x y := bind x (fun v1 => 
+              bind y (fun v2 =>
+              ret (PL.Add v1 v2)))
+    }.
+
 
   Fixpoint phoas_to_foas (Γ : stringset) (p : Phoas.prop (R PL.Exp)) : Foas.prop :=
     match p with
@@ -612,19 +615,49 @@ Inductive prop (A : Set) : Set :=
     - constructor; auto.
   Qed.
 
-  (*
-  Definition foas_contract_to_phoas_contract (V : Set) (env : listmap.string_map V) (foas_contract : Foas.Contract) : Contract V :=
+
+    (*if I make a decision procedure with Ltac that decides whether a Foas formula is well formed, can I use it to*)
+
+  Fixpoint foas_to_phoas_admitted (V:Set) (env : stringmap V) (foasprop : Foas.prop) : prop V. Admitted.
+
+
+
+  Definition foas_contract_to_phoas_contract (V : Set) (env : stringmap V) (foas_contract : Foas.Contract) : Contract V :=
      match foas_contract with
-      | Foas.MkContract forallVar pre prog  arg result post => ForallC (fun v => HoareTriple (foas_to_phoas_admitted (listmap.singleton forallVar v) pre) prog v (fun r => foas_to_phoas_admitted (listmap.double forallVar v result r) post) )
+      | Foas.MkContract forallVar pre prog  arg result post => ForallC (fun v => HoareTriple (foas_to_phoas_admitted {[ forallVar := v ]} pre) prog v (fun r => foas_to_phoas_admitted ({[ forallVar := v ]} ∪ {[ result := r ]} ) post))
      end .
+
+
+  (*
+  
   *)
-   
 
-   (* Definition rwPhoasToFoas : forall p, phoas_to_foas p = (phoas_to_foas_reader p) 0.
-  intros. reflexivity.  *)
+  
 
 
+  (*
+  Lemma wf_foas_to_phoas (A:Set) (VA:PL.ValueAlgebra A) (R : stringset → A → Type ) (store : stringmap A) (Γ : stringset) (fprop : Foas.prop) (wfp : Foas.wfprop Γ fprop) :
+     (Γ = dom store) -> Phoas.wfprop R (dom store) (foas_to_phoas VA store wfp).
+  Proof.
+  intros.
+    induction wfp. cbn.
+    - constructor.
+    - constructor.
+    - constructor; auto.
+    - constructor; auto.
+    - constructor; auto.
+    - constructor.
+      apply X.
+      + set_solver.
+      + 
+      constructor.
+      set_solver.
+    - constructor; auto.
+  Qed.
 
+  *)
+    
+    
 
  
   (*
@@ -654,23 +687,44 @@ Inductive prop (A : Set) : Set :=
       - constructor.
       - constructor. set_solver.
      Defined.
+     Check phoas_to_foas.
+     Check wfphoas_to_foas.
+
+
+     (*if we have a wellscopedness proof of phoas_to_foas*)
+    
+      Check phoas_to_foas.
+      Check foas_to_phoas.
+
+      
+    (*
+    Compute phoas_to_foas ∅ (@foas_to_phoas (R PL.Exp) R_valueAlgebra (empty : stringmap (R PL.Exp)) simpleProp (simplePropScoped (R PL.Exp))).
+     it takes too long
+    
+    *)
      
-     Compute phoas_to_foas (foas_to_phoas reader_valueAlgebra (@simplePropScoped (NatReader PL.Exp))).
-     Compute (Foas.semant (simplePropScoped PL.value)).
-     Compute simpleProp.
      
-     
+     (*
      Definition simplePropTrue : @Foas.semant nil simpleProp (simplePropScoped PL.value).
      Proof.
       simpl. 
       (*now we see the verification condition as it should be.*)
       lia.
      Qed.
+
+
+
+
+
+
+     *)
      
      
-     Definition simplePropInverse : phoas_to_foas (foas_to_phoas reader_valueAlgebra (@simplePropScoped (NatReader PL.Exp))) = simpleProp.
+     (*
+     
+     *)
+     Definition simplePropInverse : phoas_to_foas ∅ (@foas_to_phoas (R PL.Exp) R_valueAlgebra (empty : stringmap (R PL.Exp)) simpleProp (simplePropScoped (R PL.Exp))) = simpleProp.
      Proof.
-     unfold phoas_to_foas.
      simpl.
      
      Admitted.
@@ -692,21 +746,20 @@ End Phoas.
 
 
 Section constraintGeneration.
-
-  Definition Wstore (V A:Set) := (A -> debruijnmap.debruijnmap V -> Phoas.prop V) -> debruijnmap.debruijnmap V -> Phoas.prop V.
+Definition Wstore (V A:Set) := (A -> stringmap V -> Phoas.prop V) -> stringmap V -> Phoas.prop V.
   Definition ret (V A:Set) (a:A) : Wstore V A := fun post store => post a store.
   Definition bind (V A B:Set) (c : Wstore V A) (k : A->Wstore V B) : Wstore V B :=
   fun post store1 => c (fun a store2 => (k a) post store2) store1.
   
-  Definition lookupWstore (V : Set)  (varname : nat) : Wstore V V :=
-  fun post store => match (debruijnmap.lookup varname store) with 
+  Definition lookupWstore (V : Set)  (varname : string) : Wstore V V :=
+  fun post store => match (lookup varname store) with 
                         | None => Phoas.F V
                         | Some value => post value store
                     end.
-  Definition insertWstore (V : Set)  (varname : nat) (v:V) : Wstore V unit  :=
-  fun post store => post tt (debruijnmap.insert v store).
-  Definition deleteWstore (V : Set)   : Wstore V unit  :=
-  fun post store => post tt (debruijnmap.delete  store).
+  Definition insertWstore (V : Set)  (varname : string) (v:V) : Wstore V unit  :=
+  fun post store => post tt (insert varname v store).
+  Definition deleteWstore (V : Set)  (varname : string) : Wstore V unit  :=
+  fun post store => post tt (delete varname store).
   
   
   Fixpoint exec_exp (V:Set) (VA : PL.ValueAlgebra V) (e : PL.Exp) : (Wstore V V):= 
@@ -724,20 +777,20 @@ Section constraintGeneration.
   Fixpoint exec_stm (V:Set) (VA : PL.ValueAlgebra V) (stm : PL.Stm) : (Wstore V V):= 
   match stm with
   | PL.Expr e => exec_exp VA e
-  | PL.Let e body => bind (exec_exp VA e)      (fun  x =>
-                         bind (insertWstore x) (fun _ =>
+  | PL.Let var e body => bind (exec_exp VA e)      (fun  x =>
+                         bind (insertWstore var x) (fun _ =>
                          bind (exec_stm VA body)      (fun result =>
-                         bind (deleteWstore)   (fun _ =>
+                         bind (deleteWstore var)   (fun _ =>
                          ret result
                          
-                         )))) (*push and pop*)
+                         ))))
   end.
   
-  Definition wp (V:Set) (VA : PL.ValueAlgebra V) (stm : PL.Stm) (post : V -> listmap.string_map V -> Phoas.prop V)  (initStore : listmap.string_map V) : Phoas.prop V :=
+  Definition wp (V:Set) (VA : PL.ValueAlgebra V) (stm : PL.Stm) (post : V -> stringmap V -> Phoas.prop V)  (initStore : stringmap V) : Phoas.prop V :=
   (exec_stm VA stm) post initStore.
   
   
-  Definition weaken (V:Set) (post : V->Phoas.prop V) : V->listmap.string_map V->Phoas.prop V :=
+  Definition weaken (V:Set) (post : V->Phoas.prop V) : V->stringmap V->Phoas.prop V :=
   fun result _ => post result.
   
   Fixpoint vc (V:Set) (VA : PL.ValueAlgebra V) (contract : Phoas.Contract V) : Phoas.prop V :=
@@ -745,14 +798,14 @@ Section constraintGeneration.
     | Phoas.ForallC f => Phoas.Forall (fun v => vc VA (f v))
     | Phoas.HoareTriple pre prog arg post =>
       match prog with 
-        | PL.Fun functionName param body => (Phoas.Implies (pre) (wp VA body (weaken post) (listmap.singleton param arg)))
+        | PL.Fun functionName param body => (Phoas.Implies (pre) (wp VA body (weaken post) ({[ param := arg ]})))
       end
   end.
   
-  Fixpoint vc_foas (c : Foas.Contract) : Foas.prop :=
+  Definition vc_foas (c : Foas.Contract) : Foas.prop :=
   
   
-  Phoas.phoas_to_foas (vc (Phoas.reader_valueAlgebra) (Phoas.foas_contract_to_phoas_contract nil c)).
+  Phoas.phoas_to_foas ∅ (vc (Phoas.R_valueAlgebra) (Phoas.foas_contract_to_phoas_contract ∅ c)).
   
   Lemma semantp (V:Set) (p : Phoas.prop V) : Prop.
   Admitted.
@@ -764,7 +817,7 @@ Section constraintGeneration.
   (*this definition throws away the v, while p can depend on v.*)
   Lemma semantForall : forall (V:Set) (p : Phoas.prop V) (f: V-> Phoas.prop V), f =(fun v=>p) -> semantp (Phoas.Forall f) -> forall v', semantp (f v'). Admitted. 
   
-  Definition satisfies_post_angelic (V:Set) (post: V->listmap.string_map V->Phoas.prop V)(t : (V * listmap.string_map V)) : Phoas.prop V :=
+  Definition satisfies_post_angelic (V:Set) (post: V->stringmap V->Phoas.prop V)(t : (V * stringmap V)) : Phoas.prop V :=
   match t with 
   | (v,s) => post v s
   end.
@@ -776,118 +829,12 @@ Section constraintGeneration.
   
   
   Lemma adequacy (contract:Foas.Contract) : 
-  Foas.semant nil (vc_foas contract) -> contract_semant contract. 
+  Foas.semant nil (vc_foas contract) -> adequate contract. 
    
-  
-  (*
-  
-  
- 
   
 
-  (*(*wp generates a precondition*)
-  Lemma wpPrecondition : forall (V:Set) (VA:PL.ValueAlgebra V) (post : V->listmap.string_map V->Phoas.prop V) (stm : PL.Stm) (initStore :  listmap.string_map V) r, 
-  
-  semantp (wp VA stm post initStore) -> PL.evalStm VA stm initStore r -> semantp (satisfies_post_angelic post r). Admitted.
-  *)
-  
-  
-  (*wp generates the weakest precondition*)
-  Lemma wpWeakest : forall (V:Set) (VA:PL.ValueAlgebra V) (post : V->listmap.string_map V->Phoas.prop V) (stm : PL.Stm) (pre : Phoas.prop V) (initStore :  listmap.string_map V) r,       
-  
-  ((semantp pre) -> PL.evalStm VA stm initStore r-> semantp (satisfies_post_angelic post r)) (*if pre is a precondition*)
-  ->
-  (semantp pre -> semantp (wp VA stm post initStore) ). Admitted. (*pre implies the weakest precondition *)
-  
-  Lemma wpPrecondition : forall (V:Set) (VA:PL.ValueAlgebra V) (post : V->listmap.string_map V->Phoas.prop V) (stm : PL.Stm) (pre : Phoas.prop V) (initStore :  listmap.string_map V) result,       
-  
-  (semantp pre -> semantp (wp VA stm post initStore) )
-  ->
-  ((semantp pre) -> PL.evalStm VA stm initStore result-> semantp (satisfies_post_angelic post result)).  Admitted.
-  
-  Lemma wpCorrect  : forall (V:Set) (VA:PL.ValueAlgebra V) (post : V->listmap.string_map V->Phoas.prop V) (stm : PL.Stm) (pre : Phoas.prop V) (initStore :  listmap.string_map V) result,       
-  
-  (semantp pre -> semantp (wp VA stm post initStore) )
-  <->
-  ((semantp pre) -> PL.evalStm VA stm initStore result-> semantp (satisfies_post_angelic post result)).  
-  Proof.
-  intros. split.
-  - eapply wpPrecondition.
-  - eapply wpWeakest.
-  Qed.
-  
 
-   
-   
-   
-   Lemma vcGenSound : forall (V:Set) (VA:PL.ValueAlgebra V) (pre : V->Phoas.prop V) (post : V->V->Phoas.prop V) (stm : PL.Stm) (contract : Phoas.Contract V) (v:V) funcName var result, contract = Phoas.ForallC (fun v' =>Phoas.HoareTriple (pre v') (PL.Fun funcName var stm) v' (post v')) -> 
-  semantp (vc VA contract) -> semantp (pre v) ->PL.evalStm VA stm (listmap.singleton var v) result-> semantp (satisfies_post_angelic (weaken (post v)) result).
   
-  Proof.
-  intros.
-  unfold vc in H0.
-  rewrite H in  H0.
-  eapply semantForall in H0.
-  - eapply semantImplies  in H0.
-   +  Check wpWeakest.
-      Check wpPrecondition.
-   eapply wpPrecondition.
-    *  intros. eapply wpWeakest; eauto.
-    * eapply wpPrecondition;eauto.
-    * apply H2.
-   
-   + admit.
-   - admit.
-   Admitted. 
-   
-   
-   
-   
-   
-   
-   
-   
-   
-   
-   
-   
-   
-   
-     
-    (*
-  admit.
-  - 
-  
-  apply (semantForall (Phoas.Implies pre
-            (wp VA stm (weaken post)
-               (listmap.singleton var v))) ((fun v => V,
-          Phoas.Implies pre
-            (wp VA stm (weaken post)
-               (listmap.singleton var v))))) in H0. 
-               
-               
-               
-  eapply (semantImplies pre (wp VA stm (weaken post) (listmap.singleton var v0))) in H0.
-  
-  
-  
-  simplify.
-  
-  eauto.  
-  
-  
-  
-  
-  
-  (post : PL.value -> Phoas.prop PL.value) (stm : PL.Stm) (initStore : list_map.string_map PL.value) ()
-
-
-
-
-
-
-*)*)
-
 
 
 End constraintGeneration.
