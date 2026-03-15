@@ -20,6 +20,7 @@ From stdpp Require Import
 
 Import EqNotations.
 Set Implicit Arguments.
+Require Import Coq.Logic.FunctionalExtensionality.
 
   
 
@@ -179,7 +180,7 @@ End listmap.
 (*important! gmap should be replaced with List (K * V) with lookup, add and remove in their interface for the semantics to remain right.*)
 
 Module PL.
-Definition value := Z.
+Definition Value := Z.
 (*Definition eval_store := listmap.string_map value.*)
 Inductive Exp : Set :=
 | Lit (n : Z)
@@ -195,7 +196,7 @@ Inductive Prog : Set :=
   
   Class ValueAlgebra (V: Set) :=
   {
-  lit : PL.value -> V;
+  lit : PL.Value -> V;
   add : V -> V -> V
   }.
   
@@ -220,16 +221,18 @@ Since a contract and it postcondition makes a statement about terminating progra
 therefore in our case i don't think we have a need for a small-step semantics. *)
 
 (* big step semantics for expressions*)
-Inductive evalExp (store : stringmap value) :  Exp -> value ->Prop :=
+Inductive evalExp (store : stringmap Value) :  Exp -> Value ->Prop :=
   | EvalLit : forall n , evalExp store (Lit n) n  
   | EvalVar : forall x  v,  lookup x store = Some v -> evalExp store (Var x)  v
   | EvalAdd : forall a b v1 v2, evalExp store a v1 -> evalExp store b  v2 -> evalExp store (Add a b)  (Z.add v1 v2).
   
 (*big step semantics for statements*)
-Inductive evalStm (store : stringmap value) :  Stm  -> (value * stringmap value)->Prop :=
+Inductive evalStm (store : stringmap Value) :  Stm  -> (Value * stringmap Value)->Prop :=
   | EvalExpr : forall mv e, evalExp store e  mv -> evalStm store (Expr e)  (mv,store)
   | EvalLetSucces  : forall x e body store' result v, evalExp store e (v) -> evalStm (insert x v store)  body (result,store')-> evalStm store (Let x e body)  (result, delete x store') .
   
+Inductive evalProg : Prog->Value-> Value->Prop :=
+  | EvalFunc: forall (functionName : string) (param : string) (body : Stm) input result o,  evalStm ({[ param := input ]}) body (result,o) -> evalProg (Fun functionName param body) input result.
 
 Inductive wfexp (Γ : stringset) : Exp -> Type :=
 | WfLit n :
@@ -289,6 +292,8 @@ intros x H.
                                        end
       | WfAdd H1 H2=> add (interp_to_va VA store H1) (interp_to_va VA store H2)
     end.
+
+    
   
   
                                            
@@ -322,7 +327,15 @@ Inductive Relop : Set :=
   | GreaterThanEqual
   | SmallerThanEqual.
 
-
+Fixpoint semant_Relop (r:Relop) : PL.Value->PL.Value->Prop :=
+    match r with
+      |Equal => eq
+      |SmallerThan => Z.lt
+      |GreaterThan => Z.gt
+      |GreaterThanEqual => Z.ge
+      |SmallerThanEqual => Z.le
+    
+    end.
 
 Module Foas.
 
@@ -366,22 +379,32 @@ Module Foas.
      
     (*Fixpoint (r:Relop)*)
     Check Z.lt.
-    Fixpoint semant_Relop (r:Relop) : PL.value->PL.value->Prop :=
-    match r with
-      |Equal => eq
-      |SmallerThan => Z.lt
-      |GreaterThan => Z.gt
-      |GreaterThanEqual => Z.ge
-      |SmallerThanEqual => Z.le
     
+    
+    Lemma variable_introduction_domain :forall (V:Set) (store : stringmap V) x arg, (dom store ∪ {[x]}) = (dom (<[x:=arg]> store)) .
+    Proof.
+    intros.
+    rewrite dom_insert_L. 
+    set_solver.
+    Defined.
+
+    Fixpoint semant (store : stringmap PL.Value) (foasprop : Foas.prop) (proof : Foas.wfprop (dom store) foasprop ) : Prop:=
+    match proof with
+    |Foas.WfT _ => True
+    |Foas.WfF _ => False
+    |Foas.WfImplies H1 H2 => forall _ :  (semant store H1), (semant store H2)
+    |Foas.WfAnd H1 H2=> and (semant store H1) (semant store H2)
+    |Foas.WfOr H1 H2=> or (semant store H1) (semant store H2)
+    |@Foas.WfForall _ x body H => 
+    forall arg,  @semant  (insert x arg store) body (rew [fun x => Foas.wfprop x body] variable_introduction_domain store x arg  in H)  
+   |Foas.WfCmp cmp H1 H2 =>  (semant_Relop cmp) (PL.interp_to_va PL.value_valueAlgebra store H1) (PL.interp_to_va PL.value_valueAlgebra store H2)
     end.
-    
    
     
     (*this states falsely that everything is well_scoped*)
     
      (*
-     Fixpoint semant (s:debruijnmap.debruijnmap PL.value) (p : Foas.prop) (proof : WellScopedProp s p)  : Prop :=
+     Fixpoint semant (s:debruijnmap.debruijnmap PL.Value) (p : Foas.prop) (proof : WellScopedProp s p)  : Prop :=
     match proof with
       | TrueScoped _ => True
       | FalseScoped _ => False
@@ -478,6 +501,16 @@ Inductive prop (A : Set) : Set :=
 
   End WithA.
   
+  Fixpoint semant  (p : Phoas.prop (PL.Value)) : Prop :=
+    match p with
+    | Phoas.T _ => True
+    | Phoas.F _ => False
+    | Phoas.Implies l r => forall _: (semant l), (semant r)
+    | Phoas.And l r => and (semant l) (semant r)
+    | Phoas.Or l r => or (semant l) (semant r)
+    | Phoas.Forall f =>   forall x, (semant (f x))
+    | Phoas.Cmp r a b => (semant_Relop r) (a ) (b )
+    end.
   
   
   (*
@@ -532,15 +565,16 @@ Inductive prop (A : Set) : Set :=
      Search dom.
 
 
+    
+
+    (*Fixpoint convert_eq (V:Set) (store : stringmap V) (x:string) (arg:V) (a : (dom store ∪ {[x]})) : (dom (<[x:=arg]> store)).
+    *)
     Lemma variable_introduction_domain :forall (V:Set) (store : stringmap V) x arg, (dom store ∪ {[x]}) = (dom (<[x:=arg]> store)) .
     Proof.
     intros.
     rewrite dom_insert_L. 
     set_solver.
     Defined.
-
-    (*Fixpoint convert_eq (V:Set) (store : stringmap V) (x:string) (arg:V) (a : (dom store ∪ {[x]})) : (dom (<[x:=arg]> store)).
-    *)
   
 
     Fixpoint foas_to_phoas (V:Set) (VA: PL.ValueAlgebra V) (store : stringmap V) (foasprop : Foas.prop) (proof : Foas.wfprop (dom store) foasprop ) : prop V :=
@@ -705,7 +739,7 @@ Inductive prop (A : Set) : Set :=
      
      
      (*
-     Definition simplePropTrue : @Foas.semant nil simpleProp (simplePropScoped PL.value).
+     Definition simplePropTrue : @Foas.semant nil simpleProp (simplePropScoped PL.Value).
      Proof.
       simpl. 
       (*now we see the verification condition as it should be.*)
@@ -714,10 +748,16 @@ Inductive prop (A : Set) : Set :=
 
 
 
-
+    Definition simplePropTrue : @Foas.semant (∅:stringmap PL.Value) simpleProp (simplePropScoped PL.Value).
+     Proof.
+      simpl. 
+      (*now we see the verification condition as it should be.*)
+      lia.
+     Qed.
 
 
      *)
+     
      
      
      (*
@@ -737,6 +777,100 @@ Inductive prop (A : Set) : Set :=
 
    
 End Phoas.
+
+Module Hoas.
+
+
+Inductive prop : Set :=
+  | T
+  | F
+  | Implies (l : prop) (r : prop)
+  | And (l : prop ) (r : prop)
+  | Or (l : prop ) (r : prop)
+  | Forall (f : PL.Value ->  prop)
+  | Cmp (r:Relop) (a : PL.Value) (b:PL.Value).
+
+  Fixpoint phoas_to_hoas (phoasProp : Phoas.prop PL.Value ) : prop :=
+    match phoasProp with
+      | Phoas.T _ => T
+      | Phoas.F _=> F
+      | Phoas.Implies l r => Implies (phoas_to_hoas l) (phoas_to_hoas r)
+      | Phoas.And l r => And (phoas_to_hoas l) (phoas_to_hoas r)
+      | Phoas.Or l r => Or (phoas_to_hoas l) (phoas_to_hoas r)
+      | Phoas.Forall f => Forall (phoas_to_hoas ∘ f)
+      | Phoas.Cmp c l r => Cmp c l r 
+      end.
+  Fixpoint hoas_to_phoas (phoasProp : prop) : Phoas.prop PL.Value  :=
+    match phoasProp with
+      | Forall f => Phoas.Forall (hoas_to_phoas ∘ f)
+      | Cmp c l r => Phoas.Cmp c l r 
+      | T => Phoas.T _
+      | F => Phoas.F _
+      | Implies l r => Phoas.Implies (hoas_to_phoas l) (hoas_to_phoas r)
+      | And l r => Phoas.And (hoas_to_phoas l) (hoas_to_phoas r)
+      | Or l r => Phoas.Or (hoas_to_phoas l) (hoas_to_phoas r)
+      
+      end.
+  
+  Inductive Contract  := 
+     | ForallC (f: PL.Value -> Contract)
+     | HoareTriple (pre : prop) (program : PL.Prog) (arg:PL.Value) (post :PL.Value -> prop).
+
+  Fixpoint phoas_to_hoas_contract (c : Phoas.Contract PL.Value ) : Contract :=
+    match c with
+      | Phoas.ForallC f => ForallC (fun v => phoas_to_hoas_contract (f v))
+      | Phoas.HoareTriple pre prog arg post => HoareTriple (phoas_to_hoas pre) prog arg (fun v => phoas_to_hoas (post v))
+      end.
+
+  Fixpoint hoas_to_phoas_contract (c : Contract) : Phoas.Contract PL.Value  :=
+    match c with
+      | ForallC f => Phoas.ForallC (fun v => hoas_to_phoas_contract (f v))
+      | HoareTriple pre prog arg post => Phoas.HoareTriple (hoas_to_phoas pre) prog arg (fun v => hoas_to_phoas (post v))
+      end.
+
+
+  Lemma inverse_formula (p: Phoas.prop PL.Value) : hoas_to_phoas (phoas_to_hoas p) = p.
+  induction p.
+  - simpl. reflexivity.
+  - simpl. reflexivity.
+  - simpl; f_equal;try(apply IHp1);try(apply IHp2).
+  - simpl; f_equal;try(apply IHp1);try(apply IHp2).
+  - simpl; f_equal;try(apply IHp1);try(apply IHp2).
+  - simpl. f_equal. unfold "∘".  extensionality v. apply H.
+  - simpl. reflexivity.
+  Qed.
+
+
+
+  Lemma inverse_contract (c: Phoas.Contract PL.Value): hoas_to_phoas_contract (phoas_to_hoas_contract c) = c.
+  induction c.
+  -  simpl. f_equal.  extensionality v. apply H.
+  - simpl. f_equal. 
+    + apply (inverse_formula ).
+    + extensionality v. apply inverse_formula.
+  Qed.
+  
+  
+  
+  Fixpoint semant  (p : prop ) : Prop :=
+    match p with
+    | T => True
+    | F => False
+    | Implies l r => forall _: (semant l), (semant r)
+    | And l r => and (semant l) (semant r)
+    | Or l r => or (semant l) (semant r)
+    | Forall f =>   forall x, (semant (f x))
+    | Cmp r a b => (semant_Relop r) (a ) (b )
+    end.
+  
+  Definition contract_semant (contract:Hoas.Contract ) :Prop := forall  pre prog (post : PL.Value->PL.Value->prop), 
+       contract= (ForallC (fun v => HoareTriple (pre v) prog v (post v) )) -> 
+       forall inp result, semant (pre inp) ->
+               PL.evalProg prog inp result ->
+               semant (post inp result).
+
+
+End Hoas.
 
 
 
@@ -802,17 +936,86 @@ Definition Wstore (V A:Set) := (A -> stringmap V -> Phoas.prop V) -> stringmap V
       end
   end.
   
+  Definition vc_hoas  (c : Phoas.Contract PL.Value) : Hoas.prop :=
+  Hoas.phoas_to_hoas (vc (PL.value_valueAlgebra) c).
+  
   Definition vc_foas (c : Foas.Contract) : Foas.prop :=
   
-  
   Phoas.phoas_to_foas ∅ (vc (Phoas.R_valueAlgebra) (Phoas.foas_contract_to_phoas_contract ∅ c)).
+
+
+
+  End constraintGeneration.
+
+
+
+
+
+
+  Section hoasProof.
+
+
   
-  Lemma semantp (V:Set) (p : Phoas.prop V) : Prop.
+
+
+Lemma wpWeakest : forall  (post : PL.Value->stringmap PL.Value->Phoas.prop PL.Value) (stm : PL.Stm) (pre : Phoas.prop PL.Value) (initStore :  stringmap PL.Value) result endmap,       
+  
+  (Phoas.semant pre -> PL.evalStm initStore stm (result,endmap)-> Phoas.semant (post result endmap)) (*if pre is a precondition*)
+  ->
+  (Phoas.semant pre -> Phoas.semant (wp PL.value_valueAlgebra stm post initStore) ). Admitted.
+
+  
+
+Lemma wpPrecondition : forall  (post : PL.Value->stringmap PL.Value->Phoas.prop PL.Value) (stm : PL.Stm) (pre : Phoas.prop PL.Value) (initStore :  stringmap PL.Value) result endmap,       
+  (Phoas.semant pre -> Phoas.semant (wp PL.value_valueAlgebra stm post initStore) )  
+  ->
+  (Phoas.semant pre -> PL.evalStm initStore stm (result,endmap)-> Phoas.semant (post result endmap)). Admitted.
+  
+
+  (*
+ 
+  
+  *)
+
+   Lemma translation_irrelevance : forall c pre prog post,
+    Hoas.phoas_to_hoas_contract c =  Hoas.ForallC  (λ v : PL.Value,
+                                                    Hoas.HoareTriple (pre v) prog v (post v))
+  -> 
+       c = Phoas.ForallC (λ v : PL.Value,
+       Phoas.HoareTriple (Hoas.hoas_to_phoas (pre v)) prog v (fun result => Hoas.hoas_to_phoas (post v result))).
+       intros.
+    Proof.
+    pose proof (f_equal Hoas.hoas_to_phoas_contract H) as H'.
+    pose proof (Hoas.inverse_contract c) as H''.
+    rewrite H'' in H'.
+    simpl in H'.
+    apply H'.
+  Qed.
+
+
+
+  Definition adequate (c : Phoas.Contract PL.Value) : Hoas.semant (vc_hoas c)->  Hoas.contract_semant (Hoas.phoas_to_hoas_contract c).
+  Proof.
+  unfold Hoas.contract_semant.
+  intros.
+  unfold vc_hoas in H.
+  
+  simpl in H.
+  apply translation_irrelevance in H0.
+  rewrite H0 in H.
+
   Admitted.
   
-  Lemma semantImplies : forall (V:Set) (p q : Phoas.prop V), semantp (Phoas.Implies p q) -> semantp p -> semantp q. Admitted. 
   
+
+
+
+
+    
+  End hoasProof.
   
+
+
   
   (*this definition throws away the v, while p can depend on v.*)
   Lemma semantForall : forall (V:Set) (p : Phoas.prop V) (f: V-> Phoas.prop V), f =(fun v=>p) -> semantp (Phoas.Forall f) -> forall v', semantp (f v'). Admitted. 
@@ -825,7 +1028,7 @@ Definition Wstore (V A:Set) := (A -> stringmap V -> Phoas.prop V) -> stringmap V
   
   
   (*when extending to dealing with lists, the argument given to prog refers to the value associated with the values in forallVar. Right now, we ignore arg because we know it must be the string mentioned in forallVar.*)
-  Definition contract_semant (contract:Foas.Contract) :Prop := forall  forallVar pre stm arg resultName post result endStore fName,  contract=Foas.MkContract forallVar pre (PL.Fun fName arg stm ) forallVar resultName post -> forall inp, (Foas.semant (listmap.singleton forallVar inp) pre) -> PL.evalStm stm (listmap.singleton arg inp) (result,endStore) -> Foas.semant (listmap.double forallVar inp resultName result) post. 
+  Definition contract_semant (contract:Foas.Contract) : Prop := forall  forallVar pre stm arg resultName post result endStore fName,  contract=Foas.MkContract forallVar pre (PL.Fun fName arg stm ) forallVar resultName post -> forall inp, (Foas.semant (singleton forallVar inp) pre) -> PL.evalStm stm (listmap.singleton arg inp) (result,endStore) -> Foas.semant (listmap.double forallVar inp resultName result) post. 
   
   
   Lemma adequacy (contract:Foas.Contract) : 
@@ -836,8 +1039,6 @@ Definition Wstore (V A:Set) := (A -> stringmap V -> Phoas.prop V) -> stringmap V
 
   
 
-
-End constraintGeneration.
 
 
 
