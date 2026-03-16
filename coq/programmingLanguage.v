@@ -839,6 +839,16 @@ Inductive prop : Set :=
   - simpl. f_equal. unfold "∘".  extensionality v. apply H.
   - simpl. reflexivity.
   Qed.
+  Lemma inverse_formula2 (p: prop) : phoas_to_hoas (hoas_to_phoas p) = p.
+  induction p.
+  - simpl. reflexivity.
+  - simpl. reflexivity.
+  - simpl; f_equal;try(apply IHp1);try(apply IHp2).
+  - simpl; f_equal;try(apply IHp1);try(apply IHp2).
+  - simpl; f_equal;try(apply IHp1);try(apply IHp2).
+  - simpl. f_equal. unfold "∘".  extensionality v. apply H.
+  - simpl. reflexivity.
+  Qed.
 
 
 
@@ -868,6 +878,21 @@ Inductive prop : Set :=
        forall inp result, semant (pre inp) ->
                PL.evalProg prog inp result ->
                semant (post inp result).
+
+
+
+  Lemma preserves_semantics (p:Phoas.prop PL.Value): Hoas.semant (Hoas.phoas_to_hoas p) = Phoas.semant p.
+  Proof.
+  induction p.
+  - simpl. reflexivity.
+  - simpl. reflexivity.
+  - simpl; try(rewrite IHp1; rewrite IHp2); reflexivity.
+  - simpl; try(rewrite IHp1; rewrite IHp2); reflexivity.
+  - simpl; try(rewrite IHp1; rewrite IHp2); reflexivity.
+  - simpl. extensionality v. apply (H v).
+  - simpl. reflexivity.
+  Qed.  
+
 
 
 End Hoas.
@@ -964,13 +989,30 @@ Lemma wpWeakest : forall  (post : PL.Value->stringmap PL.Value->Phoas.prop PL.Va
   ->
   (Phoas.semant pre -> Phoas.semant (wp PL.value_valueAlgebra stm post initStore) ). Admitted.
 
+  Check wp.
+  Check Hoas.hoas_to_phoas.
+
   
 
-Lemma wpPrecondition : forall  (post : PL.Value->stringmap PL.Value->Phoas.prop PL.Value) (stm : PL.Stm) (pre : Phoas.prop PL.Value) (initStore :  stringmap PL.Value) result endmap,       
-  (Phoas.semant pre -> Phoas.semant (wp PL.value_valueAlgebra stm post initStore) )  
+
+  Lemma wpPreconditionHoas : forall  (post : PL.Value->Hoas.prop) (stm : PL.Stm) (pre : Hoas.prop)  (inp : PL.Value) (arg : string) result fname,       
+  (Hoas.semant pre -> Phoas.semant (wp PL.value_valueAlgebra stm (weaken (Hoas.hoas_to_phoas ∘  post)) {[arg := inp]})) 
   ->
-  (Phoas.semant pre -> PL.evalStm initStore stm (result,endmap)-> Phoas.semant (post result endmap)). Admitted.
+  (Hoas.semant pre -> PL.evalProg (PL.Fun fname arg stm ) inp result)-> Hoas.semant (post result ). Admitted. (*if pre is a precondition*)
   
+  (*Lemma wpPrecondition : forall  (post : PL.Value->stringmap PL.Value->Phoas.prop PL.Value) (stm : PL.Stm) (pre : Phoas.prop PL.Value) (inp : PL.Value) (arg : string) result fname,       
+  (Hoas.semant pre -> Hoas.semant  )  
+  ->
+  (Hoas.semant pre -> PL.evalProg (PL.Fun fname arg stm ) inp result)-> Phoas.semant (post result ∅  ). Admitted.
+  
+  
+  *)
+  
+  
+(*
+
+*)
+
 
   (*
  
@@ -996,13 +1038,61 @@ Lemma wpPrecondition : forall  (post : PL.Value->stringmap PL.Value->Phoas.prop 
 
   Definition adequate (c : Phoas.Contract PL.Value) : Hoas.semant (vc_hoas c)->  Hoas.contract_semant (Hoas.phoas_to_hoas_contract c).
   Proof.
+  
   unfold Hoas.contract_semant.
-  intros.
+  intro.
+  intro.
+  intro.
+  intro.
+  intro.
+  intro.
+  (*intros.*)
   unfold vc_hoas in H.
   
   simpl in H.
   apply translation_irrelevance in H0.
   rewrite H0 in H.
+  destruct prog.
+  simpl in H.
+  pose proof (Hoas.inverse_formula2 (pre inp)).
+  specialize (H inp).
+  rewrite H1 in H.
+  
+  Check (weaken
+               (λ result : PL.Value,
+                  Hoas.hoas_to_phoas
+                    (post inp result))).
+  Check (λ result : PL.Value,
+                  Hoas.hoas_to_phoas
+                    (post inp result)).
+  Check wpPreconditionHoas.
+  intro result.
+  pose proof (@wpPreconditionHoas (post inp) body (pre inp) inp param result functionName) as Hwp.
+  intros.
+  apply Hwp.
+  - intros. apply H in H4.
+    unfold "∘".
+    pose proof (Hoas.preserves_semantics (wp PL.value_valueAlgebra body
+              (weaken
+                (λ result : PL.Value,
+                    Hoas.hoas_to_phoas (post inp result)))
+              {[param := inp]})).
+            
+    (*I would think i could finish with rewrite H5 in H4 (simplifiying H4) and then exact H4.*)
+    
+    (*rewrite H5 in H4. apply H4.*)
+    admit.
+    - intros. exact H3.
+
+
+   
+
+          
+
+          
+    
+
+
 
   Admitted.
   
