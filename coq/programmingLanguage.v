@@ -881,7 +881,7 @@ Inductive prop : Set :=
 
 
 
-  Lemma preserves_semantics (p:Phoas.prop PL.Value): Hoas.semant (Hoas.phoas_to_hoas p) = Phoas.semant p.
+  Lemma preserves_semantics (p:Phoas.prop PL.Value): Hoas.semant (Hoas.phoas_to_hoas p) <-> Phoas.semant p.
   Proof.
   induction p.
   - simpl. reflexivity.
@@ -889,7 +889,8 @@ Inductive prop : Set :=
   - simpl; try(rewrite IHp1; rewrite IHp2); reflexivity.
   - simpl; try(rewrite IHp1; rewrite IHp2); reflexivity.
   - simpl; try(rewrite IHp1; rewrite IHp2); reflexivity.
-  - simpl. extensionality v. apply (H v).
+  - simpl. split. + intros. eapply H. eapply H0.
+                  + intros. eapply H. eapply H0. 
   - simpl. reflexivity.
   Qed.  
 
@@ -1077,24 +1078,18 @@ Lemma wpWeakest : forall  (post : PL.Value->stringmap PL.Value->Phoas.prop PL.Va
                 (λ result : PL.Value,
                     Hoas.hoas_to_phoas (post inp result)))
               {[param := inp]})).
+
+    
+    rewrite H5 in H4.
+    exact H4.        
             
     (*I would think i could finish with rewrite H5 in H4 (simplifiying H4) and then exact H4.*)
     
     (*rewrite H5 in H4. apply H4.*)
-    admit.
+    
     - intros. exact H3.
 
-
-   
-
-          
-
-          
-    
-
-
-
-  Admitted.
+  Qed.
   
   
 
