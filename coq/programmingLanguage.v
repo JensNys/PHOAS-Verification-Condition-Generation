@@ -905,7 +905,7 @@ End Hoas.
 
 
 
-Section constraintGeneration.
+Module constraintGeneration.
 Definition Wstore (V A:Set) := (A -> stringmap V -> Phoas.prop V) -> stringmap V -> Phoas.prop V.
   Definition ret (V A:Set) (a:A) : Wstore V A := fun post store => post a store.
   Definition bind (V A B:Set) (c : Wstore V A) (k : A->Wstore V B) : Wstore V B :=
@@ -939,7 +939,7 @@ Definition Wstore (V A:Set) := (A -> stringmap V -> Phoas.prop V) -> stringmap V
   | PL.Expr e => exec_exp VA e
   | PL.Let var e body => bind (exec_exp VA e)      (fun  x =>
                          bind (insertWstore var x) (fun _ =>
-                         bind (exec_stm VA body)      (fun result =>
+                         bind (exec_stm VA body)   (fun result =>
                          bind (deleteWstore var)   (fun _ =>
                          ret result
                          
@@ -973,7 +973,64 @@ Definition Wstore (V A:Set) := (A -> stringmap V -> Phoas.prop V) -> stringmap V
 
   End constraintGeneration.
 
+Section well_scoped_generation.
+Check Phoas.wfprop.
+Check Phoas.R.
+Check elem_of.
 
+(*
+Inductive wfprop (Γ : stringset) : prop A -> Type :=
+    | WfT : wfprop Γ (T A)
+    | WfF : wfprop Γ (F A)
+    | WfImplies {l r} : wfprop Γ l -> wfprop Γ r -> wfprop Γ (Implies l r)
+    | WfAnd {l r} : wfprop Γ l -> wfprop Γ r -> wfprop Γ (And l r)
+    | WfOr {l r} : wfprop Γ l -> wfprop Γ r -> wfprop Γ (Or l r)
+    | WfForall {f : A -> prop A} :
+        (forall (a : A) Γ', subseteq Γ Γ' -> WA Γ' a -> wfprop Γ' (f a)) ->
+        wfprop Γ (Forall f)
+    | WfCmp {r : Relop} {a b : A} : WA Γ a -> WA Γ b -> wfprop Γ (Cmp r a b).
+
+
+
+*)
+
+
+Lemma name : forall   (V:Set) (Γ:stringset) Γ' (p:Phoas.prop V) (is_in : stringset->V->Type),  Phoas.wfprop is_in Γ p ->  Γ ⊆ Γ' -> Phoas.wfprop is_in Γ' (p).
+Proof.
+intros.
+induction p.
+- constructor.
+- constructor.
+- constructor; inversion X.
+  + exact (IHp1 X0).
+  + exact (IHp2 X1).
+- constructor; inversion X.
+  + exact (IHp1 X0).
+  + exact (IHp2 X1).
+- constructor; inversion X.
+  + exact (IHp1 X0).
+  + exact (IHp2 X1).
+- constructor. inversion X. intros. specialize (X1 a Γ'0). 
+  pose proof (transitivity H H0).
+  apply (X1 H2 X2).
+- constructor; inversion X.
+Search (subseteq _ _ -> subseteq _ _ -> subseteq _ _).
+
+pose proof (subset_trans H H0).
+
+
+(X1 H )  intros.
+
+eapply Phoas.WfImplies in X.
+
+Lemma vc_well_scoped: forall (V:Set) (VA : PL.ValueAlgebra V) Γ is_in c, Phoas.wfprop is_in Γ (constraintGeneration.vc VA c).
+Proof.
+intros.
+induction c.
+- simpl. constructor. intros. pose proof (X a).  
+
+
+End well_scoped_generation.
 
 
 
@@ -996,11 +1053,20 @@ Lemma wpWeakest : forall  (post : PL.Value->stringmap PL.Value->Phoas.prop PL.Va
   
 
 
-  Lemma wpPreconditionHoas : forall  (post : PL.Value->Hoas.prop) (stm : PL.Stm) (pre : Hoas.prop)  (inp : PL.Value) (arg : string) result fname,       
-  (Hoas.semant pre -> Phoas.semant (wp PL.value_valueAlgebra stm (weaken (Hoas.hoas_to_phoas ∘  post)) {[arg := inp]})) 
+  Lemma wpPreconditionHoas : forall  (post : PL.Value->Hoas.prop) (stm : PL.Stm)  (inp : PL.Value) (arg : string) result fname,       
+  (Phoas.semant (wp PL.value_valueAlgebra stm (weaken (Hoas.hoas_to_phoas ∘  post)) {[arg := inp]})) 
   ->
-  (Hoas.semant pre -> PL.evalProg (PL.Fun fname arg stm ) inp result)-> Hoas.semant (post result ). Admitted. (*if pre is a precondition*)
+  (PL.evalProg (PL.Fun fname arg stm ) inp result)-> Hoas.semant (post result ). Admitted. (*if pre is a precondition*)
   
+
+
+
+
+
+
+
+
+
   (*Lemma wpPrecondition : forall  (post : PL.Value->stringmap PL.Value->Phoas.prop PL.Value) (stm : PL.Stm) (pre : Phoas.prop PL.Value) (inp : PL.Value) (arg : string) result fname,       
   (Hoas.semant pre -> Hoas.semant  )  
   ->
@@ -1041,12 +1107,7 @@ Lemma wpWeakest : forall  (post : PL.Value->stringmap PL.Value->Phoas.prop PL.Va
   Proof.
   
   unfold Hoas.contract_semant.
-  intro.
-  intro.
-  intro.
-  intro.
-  intro.
-  intro.
+  intros.
   (*intros.*)
   unfold vc_hoas in H.
   
@@ -1057,7 +1118,7 @@ Lemma wpWeakest : forall  (post : PL.Value->stringmap PL.Value->Phoas.prop PL.Va
   simpl in H.
   pose proof (Hoas.inverse_formula2 (pre inp)).
   specialize (H inp).
-  rewrite H1 in H.
+  rewrite H3 in H.
   
   Check (weaken
                (λ result : PL.Value,
@@ -1067,11 +1128,11 @@ Lemma wpWeakest : forall  (post : PL.Value->stringmap PL.Value->Phoas.prop PL.Va
                   Hoas.hoas_to_phoas
                     (post inp result)).
   Check wpPreconditionHoas.
-  intro result.
-  pose proof (@wpPreconditionHoas (post inp) body (pre inp) inp param result functionName) as Hwp.
+
+  pose proof (@wpPreconditionHoas (post inp) body inp param result functionName) as Hwp.
   intros.
   apply Hwp.
-  - intros. apply H in H4.
+  - intros. apply H in H1.
     unfold "∘".
     pose proof (Hoas.preserves_semantics (wp PL.value_valueAlgebra body
               (weaken
@@ -1080,14 +1141,14 @@ Lemma wpWeakest : forall  (post : PL.Value->stringmap PL.Value->Phoas.prop PL.Va
               {[param := inp]})).
 
     
-    rewrite H5 in H4.
-    exact H4.        
+    rewrite H4 in H1.
+    exact H1.        
             
     (*I would think i could finish with rewrite H5 in H4 (simplifiying H4) and then exact H4.*)
     
     (*rewrite H5 in H4. apply H4.*)
     
-    - intros. exact H3.
+    - intros. exact H2.
 
   Qed.
   
@@ -1118,33 +1179,3 @@ Lemma wpWeakest : forall  (post : PL.Value->stringmap PL.Value->Phoas.prop PL.Va
   
   Lemma adequacy (contract:Foas.Contract) : 
   Foas.semant nil (vc_foas contract) -> adequate contract. 
-   
-  
-
-
-  
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
