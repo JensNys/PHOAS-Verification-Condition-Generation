@@ -995,7 +995,8 @@ Inductive wfprop (Γ : stringset) : prop A -> Type :=
 *)
 
 
-Lemma name : forall   (V:Set) (Γ:stringset) Γ' (p:Phoas.prop V) (is_in : stringset->V->Type),  Phoas.wfprop is_in Γ p ->  Γ ⊆ Γ' -> Phoas.wfprop is_in Γ' (p).
+
+Lemma weakening : forall (V:Set) (Γ:stringset) Γ' (p:Phoas.prop V) (wfV : stringset->V->Type),  Phoas.wfprop wfV Γ p ->  Γ ⊆ Γ' -> Phoas.wfprop wfV Γ' p.
 Proof.
 intros.
 induction p.
@@ -1015,19 +1016,31 @@ induction p.
   apply (X1 H2 X2).
 - constructor; inversion X.
 Search (subseteq _ _ -> subseteq _ _ -> subseteq _ _).
-
++ admit.
++ admit.
+Admitted.
+(*
 pose proof (subset_trans H H0).
-
+Search set.
 
 (X1 H )  intros.
 
 eapply Phoas.WfImplies in X.
 
-Lemma vc_well_scoped: forall (V:Set) (VA : PL.ValueAlgebra V) Γ is_in c, Phoas.wfprop is_in Γ (constraintGeneration.vc VA c).
+
+
+
+*)
+
+
+Lemma vc_well_formed: forall (V:Set) (VA : PL.ValueAlgebra V) Γ wfV c, Phoas.wfprop wfV Γ (constraintGeneration.vc VA c).
 Proof.
 intros.
 induction c.
-- simpl. constructor. intros. pose proof (X a).  
+- simpl. constructor. intros. pose proof (X a).
+eapply (weakening X1 H).
+-   admit.
+Admitted.
 
 
 End well_scoped_generation.
