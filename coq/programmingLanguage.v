@@ -485,19 +485,21 @@ Inductive prop (A : Set) : Set :=
   
   Section WithA.
 
-    Variable (A : Set).
-    Variable (WA : stringset -> A -> Type).
+    Context {World : Type} (Acc : relation World) {pre : PreOrder Acc}.
 
-    Inductive wfprop (Γ : stringset) : prop A -> Type :=
-    | WfT : wfprop Γ (T A)
-    | WfF : wfprop Γ (F A)
-    | WfImplies {l r} : wfprop Γ l -> wfprop Γ r -> wfprop Γ (Implies l r)
-    | WfAnd {l r} : wfprop Γ l -> wfprop Γ r -> wfprop Γ (And l r)
-    | WfOr {l r} : wfprop Γ l -> wfprop Γ r -> wfprop Γ (Or l r)
+    Variable (A : Set).
+    Variable (WA : World -> A -> Type).
+
+    Inductive wfprop (w : World) : prop A -> Type :=
+    | WfT : wfprop w (T A)
+    | WfF : wfprop w (F A)
+    | WfImplies {l r} : wfprop w l -> wfprop w r -> wfprop w (Implies l r)
+    | WfAnd {l r} : wfprop w l -> wfprop w r -> wfprop w (And l r)
+    | WfOr {l r} : wfprop w l -> wfprop w r -> wfprop w (Or l r)
     | WfForall {f : A -> prop A} :
-        (forall (a : A) Γ', subseteq Γ Γ' -> WA Γ' a -> wfprop Γ' (f a)) ->
-        wfprop Γ (Forall f)
-    | WfCmp {r : Relop} {a b : A} : WA Γ a -> WA Γ b -> wfprop Γ (Cmp r a b).
+        (forall (a : A) w', Acc w w' -> WA w' a -> wfprop w' (f a)) ->
+        wfprop w (Forall f)
+    | WfCmp {r : Relop} {a b : A} : WA w a -> WA w b -> wfprop w (Cmp r a b).
 
   End WithA.
   
@@ -591,6 +593,22 @@ Inductive prop (A : Set) : Set :=
      
      Check foas_to_phoas.
 
+(*
+Lemma wf_foas_to_phoas (V:Set) (VA: PL.ValueAlgebra V) (store : stringmap V) (foasprop : Foas.prop) (wfFoas : Foas.wfprop (dom store) foasprop ) :forall WA, wfprop WA (@foas_to_phoas V VA store foasprop wfFoas).
+    match proof with
+    |Foas.WfT _ => T V
+    |Foas.WfF _ => F V
+    |Foas.WfImplies H1 H2 => Implies (foas_to_phoas VA store H1) (foas_to_phoas VA store H2)
+    |Foas.WfAnd H1 H2=> And (foas_to_phoas VA store H1) (foas_to_phoas VA store H2)
+    |Foas.WfOr H1 H2=> Or (foas_to_phoas VA store H1) (foas_to_phoas VA store H2)
+    |@Foas.WfForall _ x body H => 
+  Forall (fun arg => @foas_to_phoas V VA (insert x arg store) body (rew [fun x => Foas.wfprop x body] variable_introduction_domain store x arg  in H)  )
+   |Foas.WfCmp cmp H1 H2 => Cmp cmp (PL.interp_to_va VA store H1) (PL.interp_to_va VA store H2)
+    end. 
+*)
+     
+
+
 
 
      Check Phoas.wfprop.
@@ -630,8 +648,9 @@ Inductive prop (A : Set) : Set :=
 
   Definition wfr (Γ : stringset) (m : R PL.Exp) : Type :=
     PL.wfexp Γ (m Γ).
+    Check Phoas.wfprop.
 
-  Lemma wfphoas_to_foas (Γ : stringset) (p : Phoas.prop (R PL.Exp)) (wfp : Phoas.wfprop wfr Γ p) :
+  Lemma wfphoas_to_foas (Γ : stringset) (p : Phoas.prop (R PL.Exp)) (wfp : Phoas.wfprop subseteq wfr Γ p) :
     Foas.wfprop Γ (phoas_to_foas Γ p).
   Proof.
     induction wfp; cbn.
