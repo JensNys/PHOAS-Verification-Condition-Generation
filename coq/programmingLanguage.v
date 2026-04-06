@@ -628,7 +628,7 @@ Inductive wfexp (Γ : stringset) : Exp -> Type :=
 
 
 
-Lemma wf_foas_to_phoas (V:Set) (VA: PL.ValueAlgebra V) (store : stringmap V) (foasprop : Foas.prop) (wfFoas : Foas.wfprop (dom store) foasprop ) :forall World acc WA context (elem_of_world  : V->World->Type) , Like_wfexp VA WA elem_of_world -> @wfprop World acc V WA context (@foas_to_phoas V VA store foasprop wfFoas).
+Lemma wf_foas_to_phoas (V:Set) (VA: PL.ValueAlgebra V) (store : stringmap V) (foasprop : Foas.prop) (wfFoas : Foas.wfprop (dom store) foasprop ) :forall World acc WA context (elem_of_world  : V->World->Type) (X : Like_wfexp VA WA elem_of_world), @wfprop World acc V WA context (@foas_to_phoas V VA store foasprop wfFoas).
 Proof.
 intros.
 dependent induction wfFoas.
@@ -664,8 +664,6 @@ Admitted.
 
 
 
-
-print PL.ValueAlgebra.
 
 
      
