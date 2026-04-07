@@ -595,12 +595,12 @@ Inductive prop (A : Set) : Set :=
      
      Check foas_to_phoas.
 
-     Class Like_wfexp (V:Set) (VA: PL.ValueAlgebra V) (World: Type) 
-      (WA: World->V->Type) (elem_of: V->World->Type) := {
-          wf_lit : forall Γ n, WA Γ (PL.lit n);
-          wf_var : forall Γ x, elem_of x Γ -> WA Γ x;
-          wf_add : forall Γ v1 v2, WA Γ v1 -> WA Γ v2 -> WA Γ (PL.add v1 v2)
-        }.
+Class Like_wfexp (V:Set) (VA: PL.ValueAlgebra V) (World: Type) 
+(WA: World->V->Type) (elem_of: V->World->Type) := {
+    wf_lit : forall Γ n, WA Γ (PL.lit n);
+    wf_var : forall Γ x, elem_of x Γ -> WA Γ x;
+    wf_add : forall Γ v1 v2, WA Γ v1 -> WA Γ v2 -> WA Γ (PL.add v1 v2)
+}.
 
 (*Inductive Like_wfexp (V:Set) (VA : PL.ValueAlgebra V) (World : Type) (Γ : World) (WA : World->V->Type) (elem_of : V->World->Type):  Type:=
   | WfLitV n : WA Γ (PL.lit n) -> Like_wfexp VA Γ  WA elem_of
@@ -625,7 +625,14 @@ Inductive wfexp (Γ : stringset) : Exp -> Type :=
   wfexp Γ e1 ->
   wfexp Γ e2 ->
   wfexp Γ (Add e1 e2).*)
+  Check PL.contains_implies_lookup.
 
+Definition wfStore (V : Set) (World : Type) (store : stringmap V)
+    (context : World) (elem_of_world : V -> World -> Type) : Type :=
+  { s : string & { v : V & prod (store !! s = Some v) (elem_of_world v context) } }.
+
+
+   
 
 
 Lemma wf_foas_to_phoas (V:Set) (VA: PL.ValueAlgebra V) (store : stringmap V) (foasprop : Foas.prop) (wfFoas : Foas.wfprop (dom store) foasprop ) :forall World acc WA context (elem_of_world  : V->World->Type) (X : Like_wfexp VA WA elem_of_world), @wfprop World acc V WA context (@foas_to_phoas V VA store foasprop wfFoas).
