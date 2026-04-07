@@ -491,6 +491,7 @@ Inductive prop (A : Set) : Set :=
 
     Variable (A : Set).
     Variable (WA : World -> A -> Type).
+    Variable (elem_of : A -> World -> Type).
 
     Inductive wfprop (w : World) : prop A -> Type :=
     | WfT : wfprop w (T A)
@@ -499,7 +500,7 @@ Inductive prop (A : Set) : Set :=
     | WfAnd {l r} : wfprop w l -> wfprop w r -> wfprop w (And l r)
     | WfOr {l r} : wfprop w l -> wfprop w r -> wfprop w (Or l r)
     | WfForall {f : A -> prop A} :
-        (forall (a : A) w', Acc w w' -> WA w' a -> wfprop w' (f a)) ->
+        (forall (a : A) w', Acc w w' -> elem_of a w' -> wfprop w' (f a)) ->
         wfprop w (Forall f)
     | WfCmp {r : Relop} {a b : A} : WA w a -> WA w b -> wfprop w (Cmp r a b).
 
@@ -602,6 +603,10 @@ Class Like_wfexp (V:Set) (VA: PL.ValueAlgebra V) (World: Type)
     wf_add : forall Γ v1 v2, WA Γ v1 -> WA Γ v2 -> WA Γ (PL.add v1 v2)
 }.
 
+Class AccElem (V:Set)  (World: Type) (Acc: relation World) (elem_of: V->World->Type) := {
+    acc_elem : forall (Γ Γ' : World) (v:V), Acc Γ Γ' -> elem_of v Γ -> elem_of v Γ'
+}.
+
 (*Inductive Like_wfexp (V:Set) (VA : PL.ValueAlgebra V) (World : Type) (Γ : World) (WA : World->V->Type) (elem_of : V->World->Type):  Type:=
   | WfLitV n : WA Γ (PL.lit n) -> Like_wfexp VA Γ  WA elem_of
   | WfVarV x :
@@ -627,55 +632,74 @@ Inductive wfexp (Γ : stringset) : Exp -> Type :=
   wfexp Γ (Add e1 e2).*)
   Check PL.contains_implies_lookup.
 
-Definition wfStore (V : Set) (World : Type) (store : stringmap V)
+Definition WfStore (V : Set) (World : Type) (store : stringmap V)
     (context : World) (elem_of_world : V -> World -> Type) : Type :=
-  { s : string & { v : V & prod (store !! s = Some v) (elem_of_world v context) } }.
-
+    forall s v, (store !! s = Some v) -> (elem_of_world v context).
+ 
 
    
 
 
-Lemma wf_foas_to_phoas (V:Set) (VA: PL.ValueAlgebra V) (store : stringmap V) (foasprop : Foas.prop) (wfFoas : Foas.wfprop (dom store) foasprop ) :forall World acc WA context (elem_of_world  : V->World->Type) (X : Like_wfexp VA WA elem_of_world), @wfprop World acc V WA context (@foas_to_phoas V VA store foasprop wfFoas).
+Lemma wf_foas_to_phoas (V:Set) (VA: PL.ValueAlgebra V) (store : stringmap V)  (foasprop : Foas.prop) (wfFoas : Foas.wfprop (dom store) foasprop ) :forall (World:Type) (acc: relation World) (context : World) WA  (elem_of_world  : V->World->Type) (wfStore : WfStore store context elem_of_world) (X : Like_wfexp VA WA elem_of_world) ( HaccElem: AccElem acc elem_of_world), @wfprop World acc V WA elem_of_world context (@foas_to_phoas V VA store foasprop wfFoas).
 Proof.
 intros.
 dependent induction wfFoas.
 - constructor.
 - constructor.
 -  simpl. constructor.
- + eapply IHwfFoas1; try(reflexivity); apply X.
- + eapply IHwfFoas2; try(reflexivity); apply X.
+ + eapply IHwfFoas1; auto .
+ + eapply IHwfFoas2; auto .
 -  simpl. constructor.
- + eapply IHwfFoas1; try(reflexivity); apply X.
- + eapply IHwfFoas2; try(reflexivity); apply X.
+ + eapply IHwfFoas1; auto.
+ + eapply IHwfFoas2; auto .
 -  simpl. constructor.
- + eapply IHwfFoas1; try(reflexivity); apply X.
- + eapply IHwfFoas2; try(reflexivity); apply X.
+ + eapply IHwfFoas1; auto .
+ + eapply IHwfFoas2; auto .
  -  simpl. constructor.
  + induction w.
   * simpl. apply wf_lit.
-  * simpl. apply wf_var. admit.
+  * simpl.  apply wf_var. eapply (wfStore x). destruct PL.contains_implies_lookup. apply e0.
+  
+  
   * simpl. apply wf_add; auto.
  + induction w0.
   * simpl. apply wf_lit.
-  * simpl. apply wf_var. admit.
+  * simpl.  apply wf_var. eapply (wfStore x). destruct PL.contains_implies_lookup. apply e0.
+  
   * simpl. apply wf_add; auto.
- - simpl. constructor. intros. eapply  IHwfFoas.
+ - simpl. constructor. intros. eapply  IHwfFoas;eauto.
   + apply variable_introduction_domain.
   + simpl. 
   
   generalize (variable_introduction_domain store x a). intro e. destruct e. simpl. reflexivity.
   
-  + apply X.
+  + unfold WfStore.
+  intros s v Hlookup.
+
+  destruct (decide (s = x)) as [-> | Hne].
+* (* s = x, so lookup returns a *)
+  Check lookup_insert.
+  rewrite lookup_insert in Hlookup.
+  injection Hlookup as <-.
+  apply X0.
+* rewrite lookup_insert_ne in Hlookup.
+** unfold WfStore in wfStore.
+  specialize (wfStore s v).
+  apply wfStore in Hlookup.
+  eapply (acc_elem context w' v) in H;auto.
+
+
+
+** symmetry. exact Hne.
+Qed.
++auto.
++
 
 Admitted.
 
 
 
 
-
-     
-
-Admitted.
 
 
      Check Phoas.wfprop.
