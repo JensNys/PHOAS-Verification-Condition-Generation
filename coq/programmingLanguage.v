@@ -620,8 +620,9 @@ Class AccElem (V:Set)  (World: Type) (Acc: relation World) (elem_of: V->World->T
 
   Check PL.contains_implies_lookup.
 
-Definition WfStore (V : Set) (World : Type) (elem_of_world : V -> World -> Type) (store : stringmap V)
-    (context : World)  : Type :=
+Definition WfStore (V : Set) (World : Type) (elem_of_world : V -> World -> Type) :  stringmap V -> World -> Type :=
+    fun (store : stringmap V)
+    (context : World) =>
     forall s v, (store !! s = Some v) -> (elem_of_world v context).
  
   
@@ -719,7 +720,7 @@ Qed.
     }.
 
 
-  Fixpoint phoas_to_foas (Γ : stringset) (p : Phoas.prop (R PL.Exp)) : Foas.prop :=
+  Fixpoint phoas_to_foas (Γ : stringset) (p : Phoas.prop (PL.Exp)) : Foas.prop :=
     match p with
     | Phoas.T _ => Foas.T
     | Phoas.F _ => Foas.F
@@ -730,12 +731,14 @@ Qed.
         let x := fresh_string_of_set "" Γ in
         Foas.Forall x
           (phoas_to_foas (union Γ (singleton x))
-             (f (fun _ => PL.Var x)))
-    | Phoas.Cmp r a b => Foas.Cmp r (a Γ) (b Γ)
+             (f (PL.Var x)))
+    | Phoas.Cmp r a b => Foas.Cmp r (a ) (b)
     end.
 
   Definition wfr (Γ : stringset) (m : R PL.Exp) : Type :=
     PL.wfexp Γ (m Γ).
+  Definition wfe (Γ : stringset) (m : PL.Exp) : Type :=
+    PL.wfexp Γ (m ).
 
   Definition exp_elem_of  (e : PL.Exp) (Γ : stringset) : Type :=
     match e with
@@ -750,7 +753,7 @@ Qed.
 
 
   
-  Lemma wfphoas_to_foas (Γ : stringset) (p : Phoas.prop (R PL.Exp)) (wfp : @Phoas.wfprop stringset subseteq (R PL.Exp) wfr R_elem_of Γ p) :
+  Lemma wfphoas_to_foas (Γ : stringset) (p : Phoas.prop (PL.Exp)) (wfp : @Phoas.wfprop stringset subseteq ( PL.Exp) wfe exp_elem_of Γ p) :
     Foas.wfprop Γ (phoas_to_foas Γ p).
   Proof.
     induction wfp; cbn.
@@ -870,14 +873,42 @@ Lemma name : forall context store, @WfStore (R PL.Exp) stringset R_elem_of conte
   - eapply X.
   - eapply X0.
   Qed. 
+
+  Lemma wf_lit_exp: forall Γ n, wfe Γ (PL.Lit n).
+  Proof.
+  intros.
+  unfold wfe. constructor.
+  Qed.
+
+  Lemma wf_var_exp : forall Γ x, exp_elem_of x Γ -> wfe Γ x.
+  intros.
+  unfold wfe.
+  unfold exp_elem_of in X.
+  induction (x );try(contradiction).
+  constructor.
+  eauto.
+  Qed.
+
+  Lemma wf_add_exp : forall Γ v1 v2, wfe Γ v1 -> wfe Γ v2 -> wfe Γ (PL.Add v1 v2).
+  intros.
+  constructor.
+  - eapply X.
+  - eapply X0.
+  Qed. 
   
   Instance like_wfexp_R: Like_wfexp  R_valueAlgebra  wfr R_elem_of := {
     wf_lit := wf_lit_expR;
     wf_var := wf_var_expR;
     wf_add := wf_add_expR
   }.
+
+  Instance like_wfexp_exp: Like_wfexp  PL.expression_valueAlgebra  wfe exp_elem_of := {
+    wf_lit := wf_lit_exp;
+    wf_var := wf_var_exp;
+    wf_add := wf_add_exp
+  }.
   
-  Instance acc_elem_R : AccElem  subseteq exp_elem_of.
+  Instance acc_elem_exp : AccElem  subseteq exp_elem_of.
   Proof.
   constructor.
   intros.
@@ -887,23 +918,10 @@ Lemma name : forall context store, @WfStore (R PL.Exp) stringset R_elem_of conte
   apply H.
   apply X.
   Qed.
+
   
-  destruct (v Γ').
+  
 
-  Instance acc_elem_R : AccElem  subseteq R_elem_of.
-  Proof.
-  constructor.
-  intros.
-  unfold R_elem_of in *.
-  unfold exp_elem_of in  *.
-  destruct (v Γ); try(contradiction).
-
-  destruct (v Γ').
-  -
-
-  -
-
-   Admitted.
   
      
   Lemma simplePropScoped (V:Set): Foas.wfprop ∅ simpleProp.
@@ -927,23 +945,24 @@ Lemma name : forall context store, @WfStore (R PL.Exp) stringset R_elem_of conte
     
       Check phoas_to_foas.
       Check foas_to_phoas.
-      Lemma wf_foas_to_phoas_to_foas :Foas.wfprop ∅ (phoas_to_foas ∅ (@foas_to_phoas (R PL.Exp) R_valueAlgebra (empty : stringmap (R PL.Exp)) simpleProp (simplePropScoped (R PL.Exp)))).
+      Lemma wf_foas_to_phoas_to_foas :Foas.wfprop ∅ (phoas_to_foas ∅ (@foas_to_phoas (PL.Exp) PL.expression_valueAlgebra (empty : stringmap (PL.Exp)) simpleProp (simplePropScoped (PL.Exp)))).
       Proof.
       simpl. constructor.
       apply wfphoas_to_foas.
       apply wf_foas_to_phoas.
-      - admit.
-      - apply like_wfexp_R.
-      - 
-      unfold Like_wfexp.
+      - unfold WfStore. 
+      intros.
+      simpl.
+      unfold exp_elem_of.
+
+      apply lookup_singleton_Some in H.
+      destruct H.
+      set_solver.
+      - apply like_wfexp_exp.
+      - apply  acc_elem_exp.
+      Qed.
 
 
-
- 
-      unfold phoas_to_foas.
-      
-      
-      eauto; simpl; try(constructor).
 
       
     (*
