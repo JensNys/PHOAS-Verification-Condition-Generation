@@ -1,0 +1,6 @@
+(coq.theory
+ (name Phoas)
+ (package coq-phoas)
+)
+
+(include_subdirs qualified)

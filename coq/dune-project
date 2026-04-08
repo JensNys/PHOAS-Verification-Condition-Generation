@@ -1,0 +1,18 @@
+(lang dune 3.21)
+(name coq-phoas)
+(using coq 0.6)
+(generate_opam_files true)
+
+(version 0.1.0)
+(authors "Jens Nys <jens.nys@student.kuleuven.be>")
+(maintainers "Jens Nys <jens.nys@student.kuleuven.be>")
+
+(package
+ (name coq-phoas)
+ (synopsis "Constraint Generation with Parametric Higher-Order Abstract Syntax")
+ (depends
+  (coq-core      (and (>= 8.17)  (< 9.2)))
+  (coq-stdlib    (and (>= 8.17)  (< 9.2)))
+  (coq-stdpp     (and (>= 1.8.0) (< 1.13)))))
+
+(warnings (deprecated_coq_lang disabled))

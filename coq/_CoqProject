@@ -1,0 +1,7 @@
+-arg "-w all"
+
+-R theories Phoas
+theories/programmingLanguage.v
+theories/PropositionLanguages.v
+theories/Relational.v
+theories/wellscoped.v
