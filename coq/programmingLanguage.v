@@ -612,23 +612,24 @@ Class Like_wfexp (V:Set) (VA: PL.ValueAlgebra V) (World: Type)
     wf_add : forall Γ v1 v2, WA Γ v1 -> WA Γ v2 -> WA Γ (PL.add v1 v2)
 }.
 
+
+
 Class AccElem (V:Set)  (World: Type) (Acc: relation World) (elem_of: V->World->Type) := {
     acc_elem : forall (Γ Γ' : World) (v:V), Acc Γ Γ' -> elem_of v Γ -> elem_of v Γ'
 }.
 
   Check PL.contains_implies_lookup.
 
-Definition WfStore (V : Set) (World : Type) (store : stringmap V)
-    (context : World) (elem_of_world : V -> World -> Type) : Type :=
+Definition WfStore (V : Set) (World : Type) (elem_of_world : V -> World -> Type) (store : stringmap V)
+    (context : World)  : Type :=
     forall s v, (store !! s = Some v) -> (elem_of_world v context).
  
-
-   
+  
 
 
 Lemma wf_foas_to_phoas (V:Set) (VA: PL.ValueAlgebra V) (store : stringmap V)  (foasprop : Foas.prop) (wfFoas : Foas.wfprop (dom store) foasprop ) :
       forall (World:Type) (acc: relation World) (context : World) WA  (elem_of_world  : V->World->Type)
-       (wfStore : WfStore store context elem_of_world) (X : Like_wfexp VA WA elem_of_world) 
+       (wfStore : WfStore elem_of_world store context ) (X : Like_wfexp VA WA elem_of_world) 
        ( HaccElem: AccElem acc elem_of_world), 
               @wfprop World acc V WA elem_of_world context (@foas_to_phoas V VA store foasprop wfFoas).
 Proof.
@@ -687,7 +688,7 @@ Qed.
 
 Lemma wf_foas_to_phoas2 (V:Set) (VA: PL.ValueAlgebra V) (store : stringmap V)  (foasprop : Foas.prop) (wfFoas : Foas.wfprop (dom store) foasprop ) :
       forall (World:Type) (acc: relation World) (context : World) WA
-       (wfStore : WfStore store context (flip WA)) (X : Like_wfexp VA WA (flip WA)) 
+       (wfStore : WfStore (flip WA) store context ) (X : Like_wfexp VA WA (flip WA)) 
        ( HaccElem: AccElem acc (flip WA)), 
               @wfprop World acc V WA (flip WA) context (@foas_to_phoas V VA store foasprop wfFoas).
 Proof.
@@ -823,7 +824,87 @@ Qed.
   
    Definition simpleProp : Foas.prop  := Foas.Forall "x" (Foas.Implies (Foas.Cmp SmallerThan (PL.Lit 1%Z) (PL.Var "x"))(Foas.Cmp SmallerThan (PL.Lit 0%Z) (PL.Var "x"))).
      
-     
+
+  (*
+  Lemma name : forall context store, @WfStore (PL.Exp) stringset exp_elem_of context store.
+  unfold WfStore.
+  intros.
+  
+  unfold R_elem_of.
+  unfold exp_elem_of.
+  destruct v.
+  - 
+  eapply H.
+
+Lemma name : forall context store, @WfStore (R PL.Exp) stringset R_elem_of context store.
+  unfold WfStore.
+  intros.
+  
+  unfold R_elem_of.
+  unfold exp_elem_of.
+
+  eauto.
+
+  *)
+  
+  
+  Lemma wf_lit_expR: forall Γ n, wfr Γ (PL.lit n).
+  Proof.
+  intros.
+  unfold wfr. constructor.
+  Qed.
+
+  Lemma wf_var_expR : forall Γ x, R_elem_of x Γ -> wfr Γ x.
+  intros.
+  unfold wfr.
+  unfold R_elem_of in X.
+  unfold exp_elem_of in X.
+  induction (x Γ);try(contradiction).
+  constructor.
+  eauto.
+  Qed.
+
+  Lemma wf_add_expR : forall Γ v1 v2, wfr Γ v1 -> wfr Γ v2 -> wfr Γ (PL.add v1 v2).
+  intros.
+  constructor.
+  - eapply X.
+  - eapply X0.
+  Qed. 
+  
+  Instance like_wfexp_R: Like_wfexp  R_valueAlgebra  wfr R_elem_of := {
+    wf_lit := wf_lit_expR;
+    wf_var := wf_var_expR;
+    wf_add := wf_add_expR
+  }.
+  
+  Instance acc_elem_R : AccElem  subseteq exp_elem_of.
+  Proof.
+  constructor.
+  intros.
+  unfold R_elem_of in *.
+  unfold exp_elem_of in  *.
+  destruct (v ); try(contradiction).
+  apply H.
+  apply X.
+  Qed.
+  
+  destruct (v Γ').
+
+  Instance acc_elem_R : AccElem  subseteq R_elem_of.
+  Proof.
+  constructor.
+  intros.
+  unfold R_elem_of in *.
+  unfold exp_elem_of in  *.
+  destruct (v Γ); try(contradiction).
+
+  destruct (v Γ').
+  -
+
+  -
+
+   Admitted.
+  
      
   Lemma simplePropScoped (V:Set): Foas.wfprop ∅ simpleProp.
      Proof.
@@ -846,6 +927,23 @@ Qed.
     
       Check phoas_to_foas.
       Check foas_to_phoas.
+      Lemma wf_foas_to_phoas_to_foas :Foas.wfprop ∅ (phoas_to_foas ∅ (@foas_to_phoas (R PL.Exp) R_valueAlgebra (empty : stringmap (R PL.Exp)) simpleProp (simplePropScoped (R PL.Exp)))).
+      Proof.
+      simpl. constructor.
+      apply wfphoas_to_foas.
+      apply wf_foas_to_phoas.
+      - admit.
+      - apply like_wfexp_R.
+      - 
+      unfold Like_wfexp.
+
+
+
+ 
+      unfold phoas_to_foas.
+      
+      
+      eauto; simpl; try(constructor).
 
       
     (*
