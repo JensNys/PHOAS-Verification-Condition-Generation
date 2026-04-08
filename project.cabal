@@ -70,7 +70,7 @@ executable project
 
     -- Other library packages from which modules are imported.
     build-depends:    
-        base >=4.17 && <4.19,
+        base >=4.17 && <4.22,
         sbv ==10.8,
         containers,
         mtl,
