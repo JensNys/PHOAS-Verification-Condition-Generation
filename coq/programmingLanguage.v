@@ -580,6 +580,8 @@ Inductive prop (A : Set) : Set :=
     rewrite dom_insert_L. 
     set_solver.
     Defined.
+
+    (* Eval vm_compute in @variable_introduction_domain nat empty "x" 0.*)
   
 
     Fixpoint foas_to_phoas (V:Set) (VA: PL.ValueAlgebra V) (store : stringmap V) (foasprop : Foas.prop) (proof : Foas.wfprop (dom store) foasprop ) : prop V :=
@@ -596,6 +598,13 @@ Inductive prop (A : Set) : Set :=
      
      Check foas_to_phoas.
 
+   (*
+   Fixpoint foas_to_phoas2 (V:Set) (VA: PL.ValueAlgebra V) (store : stringmap V) (Gamma : stringset) (e : dom store = Gamma) (foasprop : Foas.prop) (proof : Foas.wfprop Gamma foasprop ) : prop V :=
+
+   *) 
+
+     
+
 Class Like_wfexp (V:Set) (VA: PL.ValueAlgebra V) (World: Type) 
 (WA: World->V->Type) (elem_of: V->World->Type) := {
     wf_lit : forall Γ n, WA Γ (PL.lit n);
@@ -607,29 +616,6 @@ Class AccElem (V:Set)  (World: Type) (Acc: relation World) (elem_of: V->World->T
     acc_elem : forall (Γ Γ' : World) (v:V), Acc Γ Γ' -> elem_of v Γ -> elem_of v Γ'
 }.
 
-(*Inductive Like_wfexp (V:Set) (VA : PL.ValueAlgebra V) (World : Type) (Γ : World) (WA : World->V->Type) (elem_of : V->World->Type):  Type:=
-  | WfLitV n : WA Γ (PL.lit n) -> Like_wfexp VA Γ  WA elem_of
-  | WfVarV x :
-  (elem_of x Γ -> WA Γ x) -> Like_wfexp VA Γ  WA elem_of
-
-
-| WfAddV v1 v2 : (WA Γ v1 -> WA Γ v2 -> WA Γ (PL.add v1 v2)) -> Like_wfexp VA Γ WA elem_of.
-*)
-
-
-
-(*
-
-Inductive wfexp (Γ : stringset) : Exp -> Type :=
-| WfLit n :
-  wfexp Γ (Lit n)
-| WfVar x :
-  x ∈ Γ ->
-  wfexp Γ (Var x)
-| WfAdd e1 e2 :
-  wfexp Γ e1 ->
-  wfexp Γ e2 ->
-  wfexp Γ (Add e1 e2).*)
   Check PL.contains_implies_lookup.
 
 Definition WfStore (V : Set) (World : Type) (store : stringmap V)
@@ -640,7 +626,11 @@ Definition WfStore (V : Set) (World : Type) (store : stringmap V)
    
 
 
-Lemma wf_foas_to_phoas (V:Set) (VA: PL.ValueAlgebra V) (store : stringmap V)  (foasprop : Foas.prop) (wfFoas : Foas.wfprop (dom store) foasprop ) :forall (World:Type) (acc: relation World) (context : World) WA  (elem_of_world  : V->World->Type) (wfStore : WfStore store context elem_of_world) (X : Like_wfexp VA WA elem_of_world) ( HaccElem: AccElem acc elem_of_world), @wfprop World acc V WA elem_of_world context (@foas_to_phoas V VA store foasprop wfFoas).
+Lemma wf_foas_to_phoas (V:Set) (VA: PL.ValueAlgebra V) (store : stringmap V)  (foasprop : Foas.prop) (wfFoas : Foas.wfprop (dom store) foasprop ) :
+      forall (World:Type) (acc: relation World) (context : World) WA  (elem_of_world  : V->World->Type)
+       (wfStore : WfStore store context elem_of_world) (X : Like_wfexp VA WA elem_of_world) 
+       ( HaccElem: AccElem acc elem_of_world), 
+              @wfprop World acc V WA elem_of_world context (@foas_to_phoas V VA store foasprop wfFoas).
 Proof.
 intros.
 dependent induction wfFoas.
@@ -692,12 +682,18 @@ dependent induction wfFoas.
 
 ** symmetry. exact Hne.
 Qed.
-+auto.
-+
-
-Admitted.
 
 
+
+Lemma wf_foas_to_phoas2 (V:Set) (VA: PL.ValueAlgebra V) (store : stringmap V)  (foasprop : Foas.prop) (wfFoas : Foas.wfprop (dom store) foasprop ) :
+      forall (World:Type) (acc: relation World) (context : World) WA
+       (wfStore : WfStore store context (flip WA)) (X : Like_wfexp VA WA (flip WA)) 
+       ( HaccElem: AccElem acc (flip WA)), 
+              @wfprop World acc V WA (flip WA) context (@foas_to_phoas V VA store foasprop wfFoas).
+Proof.
+  intros.
+  apply wf_foas_to_phoas; auto.
+Qed.
 
 
 
@@ -740,7 +736,20 @@ Admitted.
   Definition wfr (Γ : stringset) (m : R PL.Exp) : Type :=
     PL.wfexp Γ (m Γ).
 
-  Lemma wfphoas_to_foas (Γ : stringset) (p : Phoas.prop (R PL.Exp)) (wfp : Phoas.wfprop subseteq wfr Γ p) :
+  Definition exp_elem_of  (e : PL.Exp) (Γ : stringset) : Type :=
+    match e with
+    |  PL.Var x => x ∈ Γ
+    | _ => False
+    end.
+
+  Definition R_elem_of  (re : R PL.Exp) (Γ : stringset) : Type :=
+      exp_elem_of (re Γ) Γ.
+
+
+
+
+  
+  Lemma wfphoas_to_foas (Γ : stringset) (p : Phoas.prop (R PL.Exp)) (wfp : @Phoas.wfprop stringset subseteq (R PL.Exp) wfr R_elem_of Γ p) :
     Foas.wfprop Γ (phoas_to_foas Γ p).
   Proof.
     induction wfp; cbn.
@@ -752,9 +761,8 @@ Admitted.
     - constructor.
       apply X.
       + set_solver.
-      + 
-      constructor.
-      set_solver.
+      + unfold R_elem_of. unfold exp_elem_of.
+      set_solver. 
     - constructor; auto.
   Qed.
 
