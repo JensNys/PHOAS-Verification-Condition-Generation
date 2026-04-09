@@ -997,7 +997,7 @@ Lemma name : forall context store, @WfStore (R PL.Exp) stringset R_elem_of conte
      (*
      
      *)
-     Definition simplePropInverse : phoas_to_foas ∅ (@foas_to_phoas (R PL.Exp) R_valueAlgebra (empty : stringmap (R PL.Exp)) simpleProp (simplePropScoped (R PL.Exp))) = simpleProp.
+     Definition simplePropInverse : phoas_to_foas ∅ (@foas_to_phoas ( PL.Exp) PL.expression_valueAlgebra (empty : stringmap (PL.Exp)) simpleProp (simplePropScoped (PL.Exp))) = simpleProp.
      Proof.
      simpl.
      
@@ -1201,7 +1201,7 @@ Definition Wstore (V A:Set) := (A -> stringmap V -> Phoas.prop V) -> stringmap V
   
   Definition vc_foas (c : Foas.Contract) : Foas.prop :=
   
-  Phoas.phoas_to_foas ∅ (vc (Phoas.R_valueAlgebra) (Phoas.foas_contract_to_phoas_contract ∅ c)).
+  Phoas.phoas_to_foas ∅ (vc (PL.expression_valueAlgebra) (Phoas.foas_contract_to_phoas_contract ∅ c)).
 
 
 
