@@ -603,7 +603,9 @@ Inductive prop (A : Set) : Set :=
 
    *) 
 
-     
+   
+    
+  
 
 Class Like_wfexp (V:Set) (VA: PL.ValueAlgebra V) (World: Type) 
 (WA: World->V->Type) (elem_of: V->World->Type) := {
@@ -612,6 +614,8 @@ Class Like_wfexp (V:Set) (VA: PL.ValueAlgebra V) (World: Type)
     wf_add : forall Γ v1 v2, WA Γ v1 -> WA Γ v2 -> WA Γ (PL.add v1 v2)
 }.
 
+Variable (World : Type).
+  Definition Pred (X : Set) := World-> X -> Type.
 
 
 Class AccElem (V:Set)  (World: Type) (Acc: relation World) (elem_of: V->World->Type) := {
@@ -620,9 +624,11 @@ Class AccElem (V:Set)  (World: Type) (Acc: relation World) (elem_of: V->World->T
 
   Check PL.contains_implies_lookup.
 
-Definition WfStore (V : Set) (World : Type) (elem_of_world : V -> World -> Type) :  stringmap V -> World -> Type :=
-    fun (store : stringmap V)
-    (context : World) =>
+     
+
+Definition WfStore (V : Set) (World : Type) (elem_of_world : V -> World -> Type) : World -> stringmap V ->  Type :=
+    fun (context : World) (store : stringmap V)
+     =>
     forall s v, (store !! s = Some v) -> (elem_of_world v context).
  
   
