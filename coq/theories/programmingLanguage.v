@@ -265,7 +265,6 @@ Inductive wfexp (Γ : stringset) : Exp -> Type :=
   *)
   Search stringmap.
   Search stringset.
-  Check elem_of_dom.
 
   (*als ik een store heb en x \in (dom store) -> exists y: some y = lookup x store*)
   Definition contains_implies_lookup (V : Set) (store : stringmap V)  : forall x, x ∈ (dom store) -> {y | lookup x store = Some y}.
@@ -747,16 +746,9 @@ Qed.
     fun (Γ : stringset) (m : PL.Exp) =>
         PL.wfexp Γ (m ).
 
-  Definition exp_elem_of : Pred stringset PL.Exp :=
-  fun  (Γ : stringset) (e : PL.Exp) =>
-    match e with
-    |  PL.Var x => x ∈ Γ
-    | _ => False
-    end.
+  
 
-  Definition R_elem_of : Pred stringset (R PL.Exp) :=
-  fun  (Γ : stringset) (re : R PL.Exp) =>
-    exp_elem_of Γ (re Γ).
+  
 
 
 
@@ -866,15 +858,7 @@ Lemma name : forall context store, @WfStore (R PL.Exp) stringset R_elem_of conte
   unfold wfr. constructor.
   Qed.
 
-  Lemma wf_var_expR : forall Γ x, R_elem_of Γ x -> wfr Γ x.
-  intros.
-  unfold wfr.
-  unfold R_elem_of in X.
-  unfold exp_elem_of in X.
-  induction (x Γ);try(contradiction).
-  constructor.
-  eauto.
-  Qed.
+  
 
   Lemma wf_add_expR : forall Γ v1 v2, wfr Γ v1 -> wfr Γ v2 -> wfr Γ (PL.add v1 v2).
   intros.
@@ -889,14 +873,7 @@ Lemma name : forall context store, @WfStore (R PL.Exp) stringset R_elem_of conte
   unfold wfe. constructor.
   Qed.
 
-  Lemma wf_var_exp : forall Γ x, exp_elem_of Γ x -> wfe Γ x.
-  intros.
-  unfold wfe.
-  unfold exp_elem_of in X.
-  induction (x );try(contradiction).
-  constructor.
-  eauto.
-  Qed.
+  
 
   Lemma wf_add_exp : forall Γ v1 v2, wfe Γ v1 -> wfe Γ v2 -> wfe Γ (PL.Add v1 v2).
   intros.
@@ -915,16 +892,7 @@ Lemma name : forall context store, @WfStore (R PL.Exp) stringset R_elem_of conte
     wf_add := wf_add_exp
   }.
   
-  Instance weakening_exp : Weakening subseteq exp_elem_of.
-  Proof.
-  constructor.
-  intros.
-  unfold R_elem_of in *.
-  unfold exp_elem_of in  *.
-  destruct (v ); try(contradiction).
-  apply H.
-  apply X.
-  Qed.
+  
 
   Instance weakening_wfe : Weakening subseteq wfe.
   Proof.
@@ -1236,7 +1204,6 @@ Definition Wstore (V A:Set) := (A -> stringmap V -> Phoas.prop V) -> stringmap V
 Section well_scoped_generation.
 Check Phoas.wfprop.
 Check Phoas.R.
-Check elem_of.
 
 (*
 Inductive wfprop (Γ : stringset) : prop A -> Type :=
