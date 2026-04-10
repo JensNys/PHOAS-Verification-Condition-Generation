@@ -694,9 +694,9 @@ Qed.
 
 Lemma wf_foas_to_phoas2 (World : Type) (V:Set) (VA: PL.ValueAlgebra V) (store : stringmap V)  (foasprop : Foas.prop) (wfFoas : Foas.wfprop (dom store) foasprop ) :
       forall  (acc: relation World) (context : World) (WA : Pred World V)
-       (wfStore : WfStore ( WA) context store  ) (X : Like_wfexp VA WA ( WA)) 
-       ( HaccElem: AccElem acc ( WA)), 
-              @wfprop World acc V WA ( WA) context (@foas_to_phoas V VA store foasprop wfFoas).
+       (wfStore : WfStore ( WA) context store  ) (X : Like_wfexp VA WA ) 
+       ( HaccElem: Weakening acc ( WA)), 
+              @wfprop World acc V WA  context (@foas_to_phoas V VA store foasprop wfFoas).
 Proof.
   intros.
   apply wf_foas_to_phoas; auto.
@@ -762,7 +762,7 @@ Qed.
 
 
   
-  Lemma wfphoas_to_foas (World : Type) (Γ : stringset) (p : Phoas.prop (PL.Exp)) (wfp : @Phoas.wfprop stringset subseteq ( PL.Exp) wfe exp_elem_of Γ p) :
+  Lemma wfphoas_to_foas (World : Type) (Γ : stringset) (p : Phoas.prop (PL.Exp)) (wfp : @Phoas.wfprop stringset subseteq ( PL.Exp) wfe  Γ p) :
     Foas.wfprop Γ (phoas_to_foas Γ p).
   Proof.
     induction wfp; cbn.
@@ -774,8 +774,8 @@ Qed.
     - constructor.
       apply X.
       + set_solver.
-      + unfold R_elem_of. unfold exp_elem_of.
-      set_solver. 
+      + constructor.
+      set_solver.
     - constructor; auto.
   Qed.
 
@@ -905,19 +905,17 @@ Lemma name : forall context store, @WfStore (R PL.Exp) stringset R_elem_of conte
   - eapply X0.
   Qed. 
   
-  Instance like_wfexp_R: Like_wfexp  R_valueAlgebra  wfr R_elem_of := {
+  Instance like_wfexp_R: Like_wfexp  R_valueAlgebra  wfr  := {
     wf_lit := wf_lit_expR;
-    wf_var := wf_var_expR;
     wf_add := wf_add_expR
   }.
 
-  Instance like_wfexp_exp: Like_wfexp  PL.expression_valueAlgebra  wfe exp_elem_of := {
+  Instance like_wfexp_exp: Like_wfexp  PL.expression_valueAlgebra  wfe  := {
     wf_lit := wf_lit_exp;
-    wf_var := wf_var_exp;
     wf_add := wf_add_exp
   }.
   
-  Instance acc_elem_exp : AccElem  subseteq exp_elem_of.
+  Instance weakening_exp : Weakening subseteq exp_elem_of.
   Proof.
   constructor.
   intros.
@@ -926,6 +924,19 @@ Lemma name : forall context store, @WfStore (R PL.Exp) stringset R_elem_of conte
   destruct (v ); try(contradiction).
   apply H.
   apply X.
+  Qed.
+
+  Instance weakening_wfe : Weakening subseteq wfe.
+  Proof.
+  constructor.
+  intros.
+  unfold wfe in *.
+  induction v.
+  - constructor.
+  - constructor. apply H.  inversion X. apply H1.
+  - constructor; inversion X;auto. 
+
+  
   Qed.
 
   
@@ -964,13 +975,17 @@ Lemma name : forall context store, @WfStore (R PL.Exp) stringset R_elem_of conte
       - unfold WfStore. 
       intros.
       simpl.
-      unfold exp_elem_of.
+      unfold wfe.
 
       apply lookup_singleton_Some in H.
       destruct H.
+      rewrite <- H0.
+      constructor.
       set_solver.
+      
       - apply like_wfexp_exp.
-      - apply  acc_elem_exp.
+      - apply  weakening_wfe.
+
       Qed.
 
 
