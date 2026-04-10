@@ -491,7 +491,6 @@ Inductive prop (A : Set) : Set :=
 
     Variable (A : Set).
     Variable (WA : World -> A -> Type).
-    Variable (elem_of : A -> World -> Type).
 
     Inductive wfprop (w : World) : prop A -> Type :=
     | WfT : wfprop w (T A)
@@ -500,7 +499,7 @@ Inductive prop (A : Set) : Set :=
     | WfAnd {l r} : wfprop w l -> wfprop w r -> wfprop w (And l r)
     | WfOr {l r} : wfprop w l -> wfprop w r -> wfprop w (Or l r)
     | WfForall {f : A -> prop A} :
-        (forall (a : A) w', Acc w w' -> elem_of a w' -> wfprop w' (f a)) ->
+        (forall (a : A) w', Acc w w' -> WA w' a -> wfprop w' (f a)) ->
         wfprop w (Forall f)
     | WfCmp {r : Relop} {a b : A} : WA w a -> WA w b -> wfprop w (Cmp r a b).
 
@@ -607,38 +606,38 @@ Inductive prop (A : Set) : Set :=
     
   
 
-Class Like_wfexp (V:Set) (VA: PL.ValueAlgebra V) (World: Type) 
-(WA: World->V->Type) (elem_of: V->World->Type) := {
+
+  Definition Pred (World : Type) (X : Set) := World-> X -> Type.
+
+Class Like_wfexp (World : Type) (V:Set) (VA: PL.ValueAlgebra V) 
+(WA: Pred World V)  := {
     wf_lit : forall Γ n, WA Γ (PL.lit n);
-    wf_var : forall Γ x, elem_of x Γ -> WA Γ x;
     wf_add : forall Γ v1 v2, WA Γ v1 -> WA Γ v2 -> WA Γ (PL.add v1 v2)
 }.
 
-Variable (World : Type).
-  Definition Pred (X : Set) := World-> X -> Type.
-
-
-Class AccElem (V:Set)  (World: Type) (Acc: relation World) (elem_of: V->World->Type) := {
-    acc_elem : forall (Γ Γ' : World) (v:V), Acc Γ Γ' -> elem_of v Γ -> elem_of v Γ'
-}.
 
   Check PL.contains_implies_lookup.
 
-     
-
-Definition WfStore (V : Set) (World : Type) (elem_of_world : V -> World -> Type) : World -> stringmap V ->  Type :=
+Definition WfStore (World : Type) (V : Set)  (WA :Pred World V) :Pred World (stringmap V) :=
     fun (context : World) (store : stringmap V)
      =>
-    forall s v, (store !! s = Some v) -> (elem_of_world v context).
+    forall s v, (store !! s = Some v) -> (WA context v ).
  
-  
+  Class Weakening (V:Set)  (World: Type) (Acc: relation World) (WA: Pred World V) := {
+    weaken : forall (Γ Γ' : World) (v:V), Acc Γ Γ' -> WA Γ v -> WA Γ' v
+}.
 
 
-Lemma wf_foas_to_phoas (V:Set) (VA: PL.ValueAlgebra V) (store : stringmap V)  (foasprop : Foas.prop) (wfFoas : Foas.wfprop (dom store) foasprop ) :
-      forall (World:Type) (acc: relation World) (context : World) WA  (elem_of_world  : V->World->Type)
-       (wfStore : WfStore elem_of_world store context ) (X : Like_wfexp VA WA elem_of_world) 
-       ( HaccElem: AccElem acc elem_of_world), 
-              @wfprop World acc V WA elem_of_world context (@foas_to_phoas V VA store foasprop wfFoas).
+
+
+
+
+
+Lemma wf_foas_to_phoas (World : Type) (V:Set) (VA: PL.ValueAlgebra V) (store : stringmap V)  (foasprop : Foas.prop) (wfFoas : Foas.wfprop (dom store) foasprop ) :
+      forall  (acc: relation World) (context : World) WA  
+       (wfStore : WfStore WA context store ) (X : Like_wfexp VA WA) (Hweaken : Weakening  acc WA)
+       , 
+              @wfprop World acc V WA context (@foas_to_phoas V VA store foasprop wfFoas).
 Proof.
 intros.
 dependent induction wfFoas.
@@ -656,13 +655,13 @@ dependent induction wfFoas.
  -  simpl. constructor.
  + induction w.
   * simpl. apply wf_lit.
-  * simpl.  apply wf_var. eapply (wfStore x). destruct PL.contains_implies_lookup. apply e0.
+  * simpl.  eapply (wfStore x). destruct PL.contains_implies_lookup. apply e0. 
   
   
   * simpl. apply wf_add; auto.
  + induction w0.
   * simpl. apply wf_lit.
-  * simpl.  apply wf_var. eapply (wfStore x). destruct PL.contains_implies_lookup. apply e0.
+  * simpl.  eapply (wfStore x). destruct PL.contains_implies_lookup. apply e0.
   
   * simpl. apply wf_add; auto.
  - simpl. constructor. intros. eapply  IHwfFoas;eauto.
@@ -684,7 +683,7 @@ dependent induction wfFoas.
 ** unfold WfStore in wfStore.
   specialize (wfStore s v).
   apply wfStore in Hlookup.
-  eapply (acc_elem context w' v) in H;auto.
+  apply (weaken context w');auto.
 
 
 
@@ -693,11 +692,11 @@ Qed.
 
 
 
-Lemma wf_foas_to_phoas2 (V:Set) (VA: PL.ValueAlgebra V) (store : stringmap V)  (foasprop : Foas.prop) (wfFoas : Foas.wfprop (dom store) foasprop ) :
-      forall (World:Type) (acc: relation World) (context : World) WA
-       (wfStore : WfStore (flip WA) store context ) (X : Like_wfexp VA WA (flip WA)) 
-       ( HaccElem: AccElem acc (flip WA)), 
-              @wfprop World acc V WA (flip WA) context (@foas_to_phoas V VA store foasprop wfFoas).
+Lemma wf_foas_to_phoas2 (World : Type) (V:Set) (VA: PL.ValueAlgebra V) (store : stringmap V)  (foasprop : Foas.prop) (wfFoas : Foas.wfprop (dom store) foasprop ) :
+      forall  (acc: relation World) (context : World) (WA : Pred World V)
+       (wfStore : WfStore ( WA) context store  ) (X : Like_wfexp VA WA ( WA)) 
+       ( HaccElem: AccElem acc ( WA)), 
+              @wfprop World acc V WA ( WA) context (@foas_to_phoas V VA store foasprop wfFoas).
 Proof.
   intros.
   apply wf_foas_to_phoas; auto.
@@ -741,25 +740,29 @@ Qed.
     | Phoas.Cmp r a b => Foas.Cmp r (a ) (b)
     end.
 
-  Definition wfr (Γ : stringset) (m : R PL.Exp) : Type :=
-    PL.wfexp Γ (m Γ).
-  Definition wfe (Γ : stringset) (m : PL.Exp) : Type :=
-    PL.wfexp Γ (m ).
+  Definition wfr : Pred stringset (R PL.Exp) : Type :=
+    fun (Γ : stringset) (m : R PL.Exp)  => PL.wfexp Γ (m Γ).
 
-  Definition exp_elem_of  (e : PL.Exp) (Γ : stringset) : Type :=
+  Definition wfe  : Pred stringset (PL.Exp) :=
+    fun (Γ : stringset) (m : PL.Exp) =>
+        PL.wfexp Γ (m ).
+
+  Definition exp_elem_of : Pred stringset PL.Exp :=
+  fun  (Γ : stringset) (e : PL.Exp) =>
     match e with
     |  PL.Var x => x ∈ Γ
     | _ => False
     end.
 
-  Definition R_elem_of  (re : R PL.Exp) (Γ : stringset) : Type :=
-      exp_elem_of (re Γ) Γ.
+  Definition R_elem_of : Pred stringset (R PL.Exp) :=
+  fun  (Γ : stringset) (re : R PL.Exp) =>
+    exp_elem_of Γ (re Γ).
 
 
 
 
   
-  Lemma wfphoas_to_foas (Γ : stringset) (p : Phoas.prop (PL.Exp)) (wfp : @Phoas.wfprop stringset subseteq ( PL.Exp) wfe exp_elem_of Γ p) :
+  Lemma wfphoas_to_foas (World : Type) (Γ : stringset) (p : Phoas.prop (PL.Exp)) (wfp : @Phoas.wfprop stringset subseteq ( PL.Exp) wfe exp_elem_of Γ p) :
     Foas.wfprop Γ (phoas_to_foas Γ p).
   Proof.
     induction wfp; cbn.
@@ -863,7 +866,7 @@ Lemma name : forall context store, @WfStore (R PL.Exp) stringset R_elem_of conte
   unfold wfr. constructor.
   Qed.
 
-  Lemma wf_var_expR : forall Γ x, R_elem_of x Γ -> wfr Γ x.
+  Lemma wf_var_expR : forall Γ x, R_elem_of Γ x -> wfr Γ x.
   intros.
   unfold wfr.
   unfold R_elem_of in X.
@@ -886,7 +889,7 @@ Lemma name : forall context store, @WfStore (R PL.Exp) stringset R_elem_of conte
   unfold wfe. constructor.
   Qed.
 
-  Lemma wf_var_exp : forall Γ x, exp_elem_of x Γ -> wfe Γ x.
+  Lemma wf_var_exp : forall Γ x, exp_elem_of Γ x -> wfe Γ x.
   intros.
   unfold wfe.
   unfold exp_elem_of in X.
@@ -951,10 +954,12 @@ Lemma name : forall context store, @WfStore (R PL.Exp) stringset R_elem_of conte
     
       Check phoas_to_foas.
       Check foas_to_phoas.
-      Lemma wf_foas_to_phoas_to_foas :Foas.wfprop ∅ (phoas_to_foas ∅ (@foas_to_phoas (PL.Exp) PL.expression_valueAlgebra (empty : stringmap (PL.Exp)) simpleProp (simplePropScoped (PL.Exp)))).
+      Lemma wf_foas_to_phoas_to_foas : Foas.wfprop ∅ (phoas_to_foas ∅ (@foas_to_phoas (PL.Exp) PL.expression_valueAlgebra (empty : stringmap (PL.Exp)) simpleProp (simplePropScoped (PL.Exp)))).
       Proof.
       simpl. constructor.
-      apply wfphoas_to_foas.
+      apply wfphoas_to_foas. 
+        * apply stringset. 
+        *
       apply wf_foas_to_phoas.
       - unfold WfStore. 
       intros.
