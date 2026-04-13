@@ -293,6 +293,18 @@ intros x H.
       | WfAdd H1 H2=> add (interp_to_va VA store H1) (interp_to_va VA store H2)
     end.
 
+  Fixpoint interp_to_va_default (V : Set) (VA: ValueAlgebra V) (store:stringmap V) (e : Exp)  : V :=
+    match e with
+      |Lit n => lit n
+      
+      |Var x => match (lookup x store) with
+                                          | None => lit 0%Z
+                                          | Some v => v
+                                       end
+
+      | Add l r=> add (interp_to_va_default VA store l) (interp_to_va_default VA store r)
+    end.
+
     
   
   
@@ -582,16 +594,16 @@ Inductive prop (A : Set) : Set :=
     (* Eval vm_compute in @variable_introduction_domain nat empty "x" 0.*)
   
 
-    Fixpoint foas_to_phoas (V:Set) (VA: PL.ValueAlgebra V) (store : stringmap V) (foasprop : Foas.prop) (proof : Foas.wfprop (dom store) foasprop ) : prop V :=
-    match proof with
-    |Foas.WfT _ => T V
-    |Foas.WfF _ => F V
-    |Foas.WfImplies H1 H2 => Implies (foas_to_phoas VA store H1) (foas_to_phoas VA store H2)
-    |Foas.WfAnd H1 H2=> And (foas_to_phoas VA store H1) (foas_to_phoas VA store H2)
-    |Foas.WfOr H1 H2=> Or (foas_to_phoas VA store H1) (foas_to_phoas VA store H2)
-    |@Foas.WfForall _ x body H => 
-  Forall (fun arg => @foas_to_phoas V VA (insert x arg store) body (rew [fun x => Foas.wfprop x body] variable_introduction_domain store x arg  in H)  )
-   |Foas.WfCmp cmp H1 H2 => Cmp cmp (PL.interp_to_va VA store H1) (PL.interp_to_va VA store H2)
+    Fixpoint foas_to_phoas (V:Set) (VA: PL.ValueAlgebra V) (store : stringmap V) (foasprop : Foas.prop)  : prop V :=
+    match foasprop with
+    |Foas.T => T V
+    |Foas.F => F V
+    |Foas.Implies H1 H2 => Implies (foas_to_phoas VA store H1) (foas_to_phoas VA store H2)
+    |Foas.And H1 H2=> And (foas_to_phoas VA store H1) (foas_to_phoas VA store H2)
+    |Foas.Or H1 H2=> Or (foas_to_phoas VA store H1) (foas_to_phoas VA store H2)
+    |@Foas.Forall x body  => 
+  Forall (fun arg => @foas_to_phoas V VA (insert x arg store) body)
+    |Foas.Cmp cmp l r => Cmp cmp (PL.interp_to_va_default VA store l) (PL.interp_to_va_default VA store r)
     end. 
      
      Check foas_to_phoas.
@@ -636,7 +648,7 @@ Lemma wf_foas_to_phoas (World : Type) (V:Set) (VA: PL.ValueAlgebra V) (store : s
       forall  (acc: relation World) (context : World) WA  
        (wfStore : WfStore WA context store ) (X : Like_wfexp VA WA) (Hweaken : Weakening  acc WA)
        , 
-              @wfprop World acc V WA context (@foas_to_phoas V VA store foasprop wfFoas).
+              @wfprop World acc V WA context (@foas_to_phoas V VA store foasprop).
 Proof.
 intros.
 dependent induction wfFoas.
@@ -654,23 +666,32 @@ dependent induction wfFoas.
  -  simpl. constructor.
  + induction w.
   * simpl. apply wf_lit.
-  * simpl.  eapply (wfStore x). destruct PL.contains_implies_lookup. apply e0. 
+  * simpl. 
+  
+  eapply (wfStore x). Check   PL.contains_implies_lookup.
+  destruct (PL.contains_implies_lookup store e) as [v Hv]. rewrite Hv. reflexivity. 
   
   
   * simpl. apply wf_add; auto.
  + induction w0.
   * simpl. apply wf_lit.
-  * simpl.  eapply (wfStore x). destruct PL.contains_implies_lookup. apply e0.
+  * simpl.  eapply (wfStore x). destruct (PL.contains_implies_lookup store e) as [v Hv]. rewrite Hv. reflexivity.
   
   * simpl. apply wf_add; auto.
  - simpl. constructor. intros. eapply  IHwfFoas;eauto.
   + apply variable_introduction_domain.
   + simpl. 
   
-  generalize (variable_introduction_domain store x a). intro e. destruct e. simpl. reflexivity.
+  generalize (variable_introduction_domain store x a). 
+  unfold WfStore.
+  intros H0 s v Hlookup.
+  
+  (*unfold WfStore in *.
+  
+  destruct e. simpl. reflexivity.
   
   + unfold WfStore.
-  intros s v Hlookup.
+  intros s v Hlookup.*)
 
   destruct (decide (s = x)) as [-> | Hne].
 * (* s = x, so lookup returns a *)
