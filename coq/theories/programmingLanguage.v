@@ -483,6 +483,9 @@ Check string_to_prop "x".
   
 End Foas.
 
+
+  Definition Pred (World : Type) (X : Set) := World-> X -> Type.
+ 
 Module Phoas.
 
 
@@ -501,7 +504,7 @@ Inductive prop (A : Set) : Set :=
     Context {World : Type} (Acc : relation World) {pre : PreOrder Acc}.
 
     Variable (A : Set).
-    Variable (WA : World -> A -> Type).
+    Variable (WA :Pred World A).
 
     Inductive wfprop (w : World) : prop A -> Type :=
     | WfT : wfprop w (T A)
@@ -618,7 +621,6 @@ Inductive prop (A : Set) : Set :=
   
 
 
-  Definition Pred (World : Type) (X : Set) := World-> X -> Type.
 
 Class Like_wfexp (World : Type) (V:Set) (VA: PL.ValueAlgebra V) 
 (WA: Pred World V)  := {
@@ -1165,26 +1167,98 @@ Definition Wstore (V A:Set) := (A -> stringmap V -> Phoas.prop V) -> stringmap V
 
   fun post store1 => c (fun a store2 => (k a) post store2) store1.
 
+  Check Pred.
+
+
+  Section Preds.
+  Variable (World : Type).
+  Variable (acc : relation World).
+
+Definition WfFunc {World: Type} {A B : Set} (wfA :Pred World A) (wfB : Pred World B) : Pred World (A -> B) :=
+fun w f => forall (a:A), wfA w a -> wfB w (f a).
+
+
+  Definition Box {A : Set} ( WA : Pred World A)  : Pred World A :=
+    fun w a => forall w' , acc w w' -> WA w' a .
+
+  (* Definition Wfprop (World: Type) (A: Set) (WA : Pred World A) (acc : relation World) : Pred World (Phoas.prop A) :=
+    fun w p => forall w' , acc w w' -> Phoas.wfprop acc WA w p.*)
+
+    
+  Definition Wfprop'  (A: Set) (wfA : Pred World A): Pred World (Phoas.prop A) :=
+    fun w p => Box (Phoas.wfprop acc wfA) w p.
+
+
+
+
+  Definition WfPost ( V A: Set) (wfA :Pred World A) (wfV :Pred World V): Pred World (A->stringmap V → Phoas.prop V) :=
+  WfFunc wfA  (WfFunc (Phoas.WfStore wfV)  (Wfprop' wfV)).
+
+  Definition Wf_Wstore (V A:Set)  (wfV :Pred World V) (wfA : Pred World A) : Pred World (Wstore V A):=
+  WfFunc (WfPost wfA wfV) (WfFunc (Phoas.WfStore wfV) (Wfprop' wfV)).
+
+
+  (**)
+  Lemma wfRet  (V A: Set)  (wfV :Pred World V) (wfA :Pred World A) (w:World) (a : A) (wf_a : wfA w a) : Wf_Wstore wfV wfA w (ret a).
 
   
-Definition WfFunc (World: Type) (A V : Set) (wfV :Phoas.Pred World V) (wfA : Phoas.Pred World A) : Phoas.Pred World (A → stringmap V → Phoas.prop V).
+  repeat unfold Wf_Wstore,WfFunc,WfPost, Wfprop', Box.
+  intros.
+  eapply X;eauto.
+  Qed.
+
+
+
+(*
+Declare Scope rel_scope.
+Delimit Scope rel_scope with R.
+ Open Scope rel_scope.
+  Notation "A ↣ B" :=
+      (WfFunc A%R B%R)
+        (at level 99, B at level 200, right associativity)
+        : rel_scope.
+        
+  Close Scope rel_scope.
+  
+  
+  
+  Definition WfPost' (World: Type) (A V : Set) (wfA :Pred World A) (wfV :Pred World V) (wfProp :Pred World (Phoas.prop V)) : Pred World (A->stringmap V → Phoas.prop V) :=
+  wfA ↣ ((Phoas.WfStore wfV) ↣ wfProp).
+  
+  *) 
+
+
+  
+
+  
+
+  
+  Definition Wf_Wstore (World : Type) (V A:Set)  (wfV :Pred World V) (wfA : Pred World A) : Pred World (Wstore V A).
+
+
+Definition WfPost (World: Type) (A V : Set) (wfV :Pred World V) (wfA : Pred World A) : Pred World (A → stringmap V → Phoas.prop V).
+
+
+Definition WfaFunc (World: Type) (A V : Set) (wfA : Pred World A) (wfV :Pred World V) (wfA : Pred World A) : Pred World (A → stringmap V → Phoas.prop V).
+  
+Definition WfFunc (World: Type) (A V : Set) (wfV :Pred World V) (wfA : Pred World A) : Pred World (A → stringmap V → Phoas.prop V).
 Proof.
-unfold Phoas.Pred.
+unfold Pred.
 intro w.
 intro f.
 Admitted.
 
-Definition WfFunc' (World: Type) (acc: relation World) (A V : Set) (wfV :Phoas.Pred World V) (wfA : Phoas.Pred World A) : Phoas.Pred World (A → stringmap V → Phoas.prop V):=
-fun w f => forall w', acc w w' -> WfFunc  wfV wfA w' f.  
+Definition WfFunc' (World: Type) (acc: relation World) (A V : Set) (wfV :Pred World V) (wfA : Pred World A) : Pred World (A → stringmap V → Phoas.prop V):=
+fun w f => forall w', acc w w' -> WfFunc wfV wfA w' f.  
 
 
 
 
-  Definition Wf_Wstore (World : Type) (V A:Set)  (wfV :Phoas.Pred World V) (wfA : Phoas.Pred World A) : Phoas.Pred World (Wstore V A).
+  Definition Wf_Wstore (World : Type) (V A:Set)  (wfV :Pred World V) (wfA : Pred World A) : Pred World (Wstore V A).
 
   Proof.
   intros.
-  unfold Phoas.Pred.
+  unfold Pred.
   unfold Wstore.
   intros w storeComp.
 
