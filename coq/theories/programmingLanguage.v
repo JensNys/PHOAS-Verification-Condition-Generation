@@ -1007,11 +1007,15 @@ Lemma name : forall context store, @WfStore (R PL.Exp) stringset R_elem_of conte
      (*
      
      *)
-     Definition simplePropInverse : phoas_to_foas ∅ (@foas_to_phoas ( PL.Exp) PL.expression_valueAlgebra (empty : stringmap (PL.Exp)) simpleProp (simplePropScoped (PL.Exp))) = simpleProp.
+     Definition simplePropInverse : phoas_to_foas ∅ (@foas_to_phoas ( PL.Exp) PL.expression_valueAlgebra (empty : stringmap (PL.Exp)) simpleProp ) = simpleProp.
      Proof.
      simpl.
+     rewrite lookup_insert.
+     unfold fresh_string_of_set. simpl. unfold fresh_string. (* simpl. this causes stack overflow*)
+Admitted.
      
-     Admitted.
+     
+     
 
 
      
@@ -1247,7 +1251,7 @@ fun w f => forall w', acc w w' -> WfFunc  wfV wfA w' f.
   
   Phoas.phoas_to_foas ∅ (vc (PL.expression_valueAlgebra) (Phoas.foas_contract_to_phoas_contract ∅ c)).
 
-  forall c, wfprop ∅ (vc_foas c)
+  (* forall c, wfprop ∅ (vc_foas c) *)
 
   (*
     every type needs relation
@@ -1260,6 +1264,9 @@ fun w f => forall w', acc w w' -> WfFunc  wfV wfA w' f.
 Section well_scoped_generation.
 Check Phoas.wfprop.
 Check Phoas.R.
+
+
+
 
 (*
 Inductive wfprop (Γ : stringset) : prop A -> Type :=
