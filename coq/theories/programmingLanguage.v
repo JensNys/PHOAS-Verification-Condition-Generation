@@ -1162,9 +1162,6 @@ Definition Wstore (V A:Set) := (A -> stringmap V -> Phoas.prop V) -> stringmap V
 
   Definition ret (V A:Set) (a:A) : Wstore V A := fun post store => post a store.
   Definition bind (V A B:Set) (c : Wstore V A) (k : A->Wstore V B) : Wstore V B :=
-
-  
-
   fun post store1 => c (fun a store2 => (k a) post store2) store1.
 
   Check Pred.
@@ -1197,16 +1194,34 @@ fun w f => forall (a:A), wfA w a -> wfB w (f a).
   Definition Wf_Wstore (V A:Set)  (wfV :Pred World V) (wfA : Pred World A) : Pred World (Wstore V A):=
   WfFunc (WfPost wfA wfV) (WfFunc (Phoas.WfStore wfV) (Wfprop' wfV)).
 
+  Definition Wf_lift (V A B: Set) (wfV :Pred World V) (wfA :Pred World A) (wfB :Pred World B) : (Pred World (A -> Wstore V B)) :=
+     WfFunc wfA (Wf_Wstore wfV wfB).
+
 
   (**)
   Lemma wfRet  (V A: Set)  (wfV :Pred World V) (wfA :Pred World A) (w:World) (a : A) (wf_a : wfA w a) : Wf_Wstore wfV wfA w (ret a).
-
-  
   repeat unfold Wf_Wstore,WfFunc,WfPost, Wfprop', Box.
   intros.
   eapply X;eauto.
   Qed.
 
+(*
+
+Definition bind (V A B:Set) (c : Wstore V A) (k : A->Wstore V B) : Wstore V B :=
+  fun post store1 => c (fun a store2 => (k a) post store2) store1.
+  
+  *)
+
+  
+
+  Lemma wfBind  (V A B: Set)  (wfV :Pred World V) (wfA :Pred World A) (wfB :Pred World B) (w:World) (c : Wstore V A) (k : A->Wstore V B) (wf_c : Wf_Wstore wfV wfA w c) (wf_k : Wf_lift wfV wfA wfB w k) : Wf_Wstore wfV wfB w (bind c k).
+  unfold bind.
+  unfold Wf_Wstore.
+  unfold WfFunc.
+  repeat unfold Wf_Wstore,WfFunc,WfPost, Wfprop', Box, Wf_lift in *.
+  intros post H store wfStore w' acc_w'.
+  auto.
+  Qed.
 
 
 (*
