@@ -617,7 +617,7 @@ Class Like_wfexp (World : Type) (V:Set) (VA: PL.ValueAlgebra V)
 
   Check PL.contains_implies_lookup.
 
-Definition WfStore (World : Type) (V : Set)  (WA :Pred World V) :Pred World (stringmap V) :=
+Definition WfStore (World : Type) (V : Set)  (WA :Pred World V) : Pred World (stringmap V) :=
     fun (context : World) (store : stringmap V)
      =>
     forall s v, (store !! s = Some v) -> (WA context v ).
@@ -1135,9 +1135,43 @@ End Hoas.
 
 Module constraintGeneration.
 Definition Wstore (V A:Set) := (A -> stringmap V -> Phoas.prop V) -> stringmap V -> Phoas.prop V.
+
+
+
   Definition ret (V A:Set) (a:A) : Wstore V A := fun post store => post a store.
   Definition bind (V A B:Set) (c : Wstore V A) (k : A->Wstore V B) : Wstore V B :=
+
+  
+
   fun post store1 => c (fun a store2 => (k a) post store2) store1.
+
+
+  
+Definition WfFunc (World: Type) (A V : Set) (wfV :Phoas.Pred World V) (wfA : Phoas.Pred World A) : Phoas.Pred World (A → stringmap V → Phoas.prop V).
+Proof.
+unfold Phoas.Pred.
+intro w.
+intro f.
+Admitted.
+
+Definition WfFunc' (World: Type) (acc: relation World) (A V : Set) (wfV :Phoas.Pred World V) (wfA : Phoas.Pred World A) : Phoas.Pred World (A → stringmap V → Phoas.prop V):=
+fun w f => forall w', acc w w' -> WfFunc  wfV wfA w' f.  
+
+
+
+
+  Definition Wf_Wstore (World : Type) (V A:Set)  (wfV :Phoas.Pred World V) (wfA : Phoas.Pred World A) : Phoas.Pred World (Wstore V A).
+
+  Proof.
+  intros.
+  unfold Phoas.Pred.
+  unfold Wstore.
+  intros w storeComp.
+
+  Admitted.
+
+
+
   
   Definition lookupWstore (V : Set)  (varname : string) : Wstore V V :=
   fun post store => match (lookup varname store) with 
@@ -1197,6 +1231,12 @@ Definition Wstore (V A:Set) := (A -> stringmap V -> Phoas.prop V) -> stringmap V
   
   Phoas.phoas_to_foas ∅ (vc (PL.expression_valueAlgebra) (Phoas.foas_contract_to_phoas_contract ∅ c)).
 
+  forall c, wfprop ∅ (vc_foas c)
+
+  (*
+    every type needs relation
+    every operation needs lemma
+  *)
 
 
   End constraintGeneration.
