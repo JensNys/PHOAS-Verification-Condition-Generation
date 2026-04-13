@@ -716,7 +716,7 @@ Lemma wf_foas_to_phoas2 (World : Type) (V:Set) (VA: PL.ValueAlgebra V) (store : 
       forall  (acc: relation World) (context : World) (WA : Pred World V)
        (wfStore : WfStore ( WA) context store  ) (X : Like_wfexp VA WA ) 
        ( HaccElem: Weakening acc ( WA)), 
-              @wfprop World acc V WA  context (@foas_to_phoas V VA store foasprop wfFoas).
+              @wfprop World acc V WA  context (@foas_to_phoas V VA store foasprop).
 Proof.
   intros.
   apply wf_foas_to_phoas; auto.
@@ -954,23 +954,18 @@ Lemma name : forall context store, @WfStore (R PL.Exp) stringset R_elem_of conte
     
       Check phoas_to_foas.
       Check foas_to_phoas.
-      Lemma wf_foas_to_phoas_to_foas : Foas.wfprop ∅ (phoas_to_foas ∅ (@foas_to_phoas (PL.Exp) PL.expression_valueAlgebra (empty : stringmap (PL.Exp)) simpleProp (simplePropScoped (PL.Exp)))).
+      Lemma wf_foas_to_phoas_to_foas : Foas.wfprop ∅ (phoas_to_foas ∅ (@foas_to_phoas (PL.Exp) PL.expression_valueAlgebra (empty : stringmap (PL.Exp)) simpleProp )).
       Proof.
-      simpl. constructor.
+      
       apply wfphoas_to_foas. 
         * apply stringset. 
         *
       apply wf_foas_to_phoas.
+      - apply simplePropScoped.
+        apply PL.Exp.
       - unfold WfStore. 
-      intros.
-      simpl.
-      unfold wfe.
-
-      apply lookup_singleton_Some in H.
-      destruct H.
-      rewrite <- H0.
-      constructor.
-      set_solver.
+        intros.
+        apply lookup_empty_Some in H. contradiction.
       
       - apply like_wfexp_exp.
       - apply  weakening_wfe.
