@@ -1386,6 +1386,16 @@ Definition bind (V A B:Set) (c : Wstore V A) (k : A->Wstore V B) : Wstore V B :=
   ))
   end.
 
+
+  Definition wf_string_store  {V:Set} (store: stringmap V) (wfV : Pred World V) : Pred World string :=
+  fun w s => forall v,  store !! s = Some v -> wfV w v.
+
+  Fixpoint WfStmfp (wfString : Pred World string) (w : World) (p : PL.Stm) : Type :=
+  match p with
+  | PL.Expr e => WfExpfp wfString w e
+  | PL.Let var e body => forall w', acc w w' -> wfString w' var -> WfStmfp wfString w' body 
+  end.
+
  
 
   Lemma wf_exec_exp  (V:Set) (wfV :Pred World V) (VA : PL.ValueAlgebra V) 
