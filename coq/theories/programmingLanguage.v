@@ -1223,7 +1223,7 @@ Delimit Scope rel_scope with R.
 
 
   (* Definition Wfprop (World: Type) (A: Set) (WA : Pred World A) (acc : relation World) : Pred World (Phoas.prop A) :=
-    fun w p => forall w' , acc w w' -> Phoas.wfprop acc WA w p.*)
+    fun w p => forall w' , acc w w' -> Phoas.wfprop acc WA w' p.*)
 
     
   Definition Wfprop'  (A: Set) (wfA : Pred World A): Pred World (Phoas.prop A) :=
@@ -1233,7 +1233,7 @@ Delimit Scope rel_scope with R.
 
 
   Definition WfPost ( V A: Set) (wfA :Pred World A) (wfV :Pred World V): Pred World (A->stringmap V → Phoas.prop V) :=
-   wfA  ↣ ( (Phoas.WfStore wfV) ↣ (Wfprop' wfV)).
+   wfA  ↣ Phoas.WfStore wfV ↣ Wfprop' wfV.
 
   (*Definition Wf_Wstore (V A:Set)  (wfV :Pred World V) (wfA : Pred World A) : Pred World (Wstore V A):=
   WfFunc (WfPost wfA wfV) (WfFunc (Phoas.WfStore wfV) (Wfprop' wfV))*)
