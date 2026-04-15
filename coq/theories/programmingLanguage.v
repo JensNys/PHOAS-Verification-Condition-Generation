@@ -873,7 +873,10 @@ Qed.
    (* tbcCheck phoas_to_foas (Foas.foas_to_phoas simplePropScoped). *)
    
   
-   Definition simpleProp : Foas.prop  := Foas.Forall "x" (Foas.Implies (Foas.Cmp SmallerThan (PL.Lit 1%Z) (PL.Var "x"))(Foas.Cmp SmallerThan (PL.Lit 0%Z) (PL.Var "x"))).
+   Definition simpleProp : Foas.prop  := Foas.Forall "x" 
+                                                (Foas.Implies
+                                                 (Foas.Cmp SmallerThan (PL.Lit 1%Z) (PL.Var "x"))
+                                                 (Foas.Cmp SmallerThan (PL.Lit 0%Z) (PL.Var "x"))).
      
 
   (*
@@ -1034,11 +1037,13 @@ Lemma name : forall context store, @WfStore (R PL.Exp) stringset R_elem_of conte
      (*
      
      *)
+     (*if i would really want to prove this i would have to introduce a notion of alpha equivalence
+     However i actually just want to *)
      Definition simplePropInverse : phoas_to_foas ∅ (@foas_to_phoas ( PL.Exp) PL.expression_valueAlgebra (empty : stringmap (PL.Exp)) simpleProp ) = simpleProp.
      Proof.
      simpl.
      rewrite lookup_insert.
-     unfold fresh_string_of_set. simpl. unfold fresh_string. (* simpl. this causes stack overflow*)
+     unfold fresh_string_of_set. simpl. unfold fresh_string.  (* simpl. this causes stack overflow*)
 Admitted.
      
      
@@ -1199,28 +1204,46 @@ Definition Wstore (V A:Set) := (A -> stringmap V -> Phoas.prop V) -> stringmap V
 Definition WfFunc {World: Type} {A B : Set} (wfA :Pred World A) (wfB : Pred World B) : Pred World (A -> B) :=
 fun w f => forall (a:A), wfA w a -> wfB w (f a).
 
-
   Definition Box {A : Set} ( WA : Pred World A)  : Pred World A :=
     fun w a => forall w' , acc w w' -> WA w' a .
+
+Declare Scope rel_scope.
+Delimit Scope rel_scope with R.
+ Open Scope rel_scope.
+  Notation "A ↣ B" :=
+      (WfFunc A%R B%R)
+        (at level 99, B at level 200, right associativity)
+        : rel_scope.
+
+  Notation "□ A"    := (Box A%R) (at level 50, A at level 9): rel_scope.
+        
+
+
+
+
 
   (* Definition Wfprop (World: Type) (A: Set) (WA : Pred World A) (acc : relation World) : Pred World (Phoas.prop A) :=
     fun w p => forall w' , acc w w' -> Phoas.wfprop acc WA w p.*)
 
     
   Definition Wfprop'  (A: Set) (wfA : Pred World A): Pred World (Phoas.prop A) :=
-    fun w p => Box (Phoas.wfprop acc wfA) w p.
+    fun w p => □ (Phoas.wfprop acc wfA) w p.
 
 
 
 
   Definition WfPost ( V A: Set) (wfA :Pred World A) (wfV :Pred World V): Pred World (A->stringmap V → Phoas.prop V) :=
-  WfFunc wfA  (WfFunc (Phoas.WfStore wfV)  (Wfprop' wfV)).
+   wfA  ↣ ( (Phoas.WfStore wfV) ↣ (Wfprop' wfV)).
 
-  Definition Wf_Wstore (V A:Set)  (wfV :Pred World V) (wfA : Pred World A) : Pred World (Wstore V A):=
-  WfFunc (WfPost wfA wfV) (WfFunc (Phoas.WfStore wfV) (Wfprop' wfV)).
+  (*Definition Wf_Wstore (V A:Set)  (wfV :Pred World V) (wfA : Pred World A) : Pred World (Wstore V A):=
+  WfFunc (WfPost wfA wfV) (WfFunc (Phoas.WfStore wfV) (Wfprop' wfV))*)
+
+Definition Wf_Wstore (V A:Set)  (wfV :Pred World V) (wfA : Pred World A) : Pred World (Wstore V A):=
+   (WfPost wfA wfV) ↣ (Phoas.WfStore wfV) ↣ (Wfprop' wfV).
+
 
   Definition Wf_lift (V A B: Set) (wfV :Pred World V) (wfA :Pred World A) (wfB :Pred World B) : (Pred World (A -> Wstore V B)) :=
-     WfFunc wfA (Wf_Wstore wfV wfB).
+      wfA ↣ (Wf_Wstore wfV wfB).
 
      (*
       Definition wfContract {World:Type} (V:Set) (wfV : Pred World V) : Pred World (Contract V) :=
@@ -1271,15 +1294,7 @@ Definition bind (V A B:Set) (c : Wstore V A) (k : A->Wstore V B) : Wstore V B :=
 
 
 (*
-Declare Scope rel_scope.
-Delimit Scope rel_scope with R.
- Open Scope rel_scope.
-  Notation "A ↣ B" :=
-      (WfFunc A%R B%R)
-        (at level 99, B at level 200, right associativity)
-        : rel_scope.
-        
-  Close Scope rel_scope.
+
   
   
   
@@ -1357,6 +1372,8 @@ Delimit Scope rel_scope with R.
 
   Definition WfExp (wfString : Pred World string) : Pred World PL.Exp :=
     fun w e => WfExpfp wfString w e.
+
+    
   
   Fixpoint exec_exp (V:Set) (VA : PL.ValueAlgebra V) (e : PL.Exp) : (Wstore V V):= 
   match e with
