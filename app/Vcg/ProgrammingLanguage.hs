@@ -35,6 +35,7 @@ data Exp = Lit Value
     | Mul Exp Exp
     | Minus Exp Exp
   deriving (Eq,Show)
+  
 data Stm = Expr Exp
     | Assign X Exp -- x := Stm (update a variable)
     | Let X Exp Stm -- let X = Stm where Stm (make a new variable)

@@ -1492,6 +1492,11 @@ Lemma refl : forall w, acc w w.
   Qed.
   Hint Resolve refl : core.
 
+  Lemma trans : forall w w' w'', acc w w' -> acc w' w'' -> acc w w''.
+
+  etransitivity ;eauto.
+  Qed.
+  Hint Resolve trans : core.
 
 
   (* Definition Wfprop (World: Type) (A: Set) (WA : Pred World A) (acc : relation World) : Pred World (Phoas.prop A) :=
@@ -1541,7 +1546,7 @@ Definition Wf_Wstore (V A:Set)  (wfV :Pred World V) (wfA : Pred World A) : Pred 
   
 
   (**)
-  Lemma wfRet   (w:World) (a : A) (wf_a : wfA w a) : Wf_Wstore wfV wfA w (ret a).
+  Lemma wfRet  (C : Set) (w:World) (c : C) (wfC : Pred World C) (wf_a : wfC w c) : Wf_Wstore wfV wfC w (ret c).
   repeat unfold Wf_Wstore,WfFunc,WfPost, Wfprop, Box.
   intros.
   eapply X;eauto.
@@ -1587,7 +1592,9 @@ Definition bind (V A B:Set) (c : Wstore V A) (k : A->Wstore V B) : Wstore V B :=
   specialize (H w H0).
   *)
  
-   eauto.
+   eauto. 
+
+   (*
    simple apply wf_c;eauto.
    * intros . simple apply wf_k; try assumption.
    intros.
@@ -1595,6 +1602,8 @@ Definition bind (V A B:Set) (c : Wstore V A) (k : A->Wstore V B) : Wstore V B :=
    eapply H;
    eauto.
    etransitivity;eauto.
+   *)
+   
    
  
    Qed.
@@ -1770,26 +1779,36 @@ Qed.
     (*Var*)
    - simpl. eapply wflookupWstore;eauto.
    (*Add*)
-   - simpl.  eapply wfBind; eauto.
-  
+   - simpl.  eapply wfBind ; eauto.
    
-   
-   + repeat unfold Wf_Wstore,WfFunc,WfPost, Wfprop, Box, Wf_lift .
+   repeat unfold WfFunc,WfPost, Wfprop, Box, Wf_lift .
      intros. 
      eapply wfBind;eauto.
-     ++ unfold Wf_Wstore in *.
-     unfold Box. 
+     ++ simpl in *. 
+     
+     
      
      repeat unfold Wf_Wstore,WfFunc,WfPost, Wfprop, Box, Wf_lift in *.
      intros.
-     eapply IHe2; eauto.
+     simpl.
+     eauto.
+
+     (*
+     
+     apply IHe2; eauto.
      unfold WfExp in wfe.
      simpl in wfe. apply wfe.
-     ++ repeat unfold Wf_Wstore,WfFunc,WfPost, Wfprop', Box, Wf_lift in *.
+     *)
+     
+     admit.
+     
+     
+     ++ repeat unfold Wf_Wstore,WfFunc,WfPost, Wfprop, Box, Wf_lift in *.
         intros.
         eapply wfRet;eauto.
         apply Phoas.wf_add;eauto.
-  Qed.
+        eapply weaken;eauto.
+  Admitted.
 
 
   
@@ -1816,7 +1835,7 @@ Qed.
   (exec_stm VA stm) post initStore.
   
   
-  Definition weaken (V:Set) (post : V->Phoas.prop V) : V->stringmap V->Phoas.prop V :=
+  Definition weaken' (V:Set) (post : V->Phoas.prop V) : V->stringmap V->Phoas.prop V :=
   fun result _ => post result.
   
   Fixpoint vc (V:Set) (VA : PL.ValueAlgebra V) (contract : Phoas.Contract V) : Phoas.prop V :=
@@ -1824,7 +1843,7 @@ Qed.
     | Phoas.ForallC f => Phoas.Forall (fun v => vc VA (f v))
     | Phoas.HoareTriple pre prog arg post =>
       match prog with 
-        | PL.Fun functionName param body => (Phoas.Implies (pre) (wp VA body (weaken post) ({[ param := arg ]})))
+        | PL.Fun functionName param body => (Phoas.Implies (pre) (wp VA body (weaken' post) ({[ param := arg ]})))
       end
   end.
   
@@ -1842,7 +1861,7 @@ Qed.
     every operation needs lemma
   *)
 
-
+End Preds.
   End constraintGeneration.
 
 Section well_scoped_generation.

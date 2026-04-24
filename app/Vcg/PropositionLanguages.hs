@@ -5,6 +5,7 @@ import Vcg.ProgrammingLanguage
 
 import Control.Monad.Reader
 import Data.Map as M
+import Control.Monad.State
 
 
 
@@ -99,6 +100,9 @@ type ReaderInt v = Reader Int v
 phoasValue_to_foasValueReader (PVal v) = return $ FVal v
 phoasValue_to_foasValueReader (PVar rfv) = rfv -}
 
+example_2_scopes ::  PhoasProp a
+example_2_scopes = PhoasAnd (PhoasForall Nothing (\a -> PhoasCmp Equal a a)) (PhoasExist Nothing (\a-> PhoasCmp Equal a a ))
+
 
 phoas_to_foas :: PhoasProp (ReaderInt Exp) -> FoasProp
 phoas_to_foas phoasProp = runReader (phoas_to_foas_reader phoasProp) 0
@@ -120,18 +124,6 @@ phoas_to_foas_reader (PhoasImplies p1 p2)= binary_prop_to_foas_reader p1 p2 Foas
 phoas_to_foas_reader (PhoasExist m f)    = quantifiers_to_foas_reader m f FoasExist
 phoas_to_foas_reader (PhoasForall m f)   = quantifiers_to_foas_reader m f FoasForall
 
-phoas_to_hoas ::  PhoasProp Value-> Prop
-phoas_to_hoas PhoasT = T
-phoas_to_hoas PhoasF = F
-phoas_to_hoas (PhoasCmp op l r) = Cmp op l r
-phoas_to_hoas (PhoasNot p) = Not  (phoas_to_hoas p)
-phoas_to_hoas (PhoasAnd p1 p2)    = And (phoas_to_hoas p1) (phoas_to_hoas p2)
-phoas_to_hoas (PhoasOr p1 p2)     = Or (phoas_to_hoas p1) (phoas_to_hoas p2)
-phoas_to_hoas (PhoasImplies p1 p2)= Implies (phoas_to_hoas p1) (phoas_to_hoas p2)
-phoas_to_hoas (PhoasExist _ f)    = Exist (phoas_to_hoas . f)
-phoas_to_hoas (PhoasForall _ f)   = Forall (phoas_to_hoas . f)
-
-
 -- interprets a quantifier
 quantifiers_to_foas_reader :: Maybe String -> ((ReaderInt Exp)->PhoasProp (ReaderInt Exp))->(LVar->FoasProp->FoasProp)->ReaderInt FoasProp
 quantifiers_to_foas_reader  m f quantifier=do i <- ask
@@ -152,6 +144,74 @@ binary_prop_to_foas_reader :: (PhoasProp (ReaderInt Exp))->(PhoasProp (ReaderInt
 binary_prop_to_foas_reader p1 p2 bin = do r1 <- phoas_to_foas_reader p1
                                           r2 <- phoas_to_foas_reader p2
                                           return $ bin r1 r2
+
+type StateInt v = State Int v
+
+phoas_to_foas_global :: PhoasProp (StateInt Exp) -> FoasProp
+phoas_to_foas_global phoasProp = evalState (phoas_to_foas_state phoasProp) 0
+
+
+
+
+phoas_to_foas_state :: PhoasProp (StateInt Exp) -> StateInt FoasProp
+phoas_to_foas_state PhoasT = return FoasT
+phoas_to_foas_state PhoasF = return FoasF
+phoas_to_foas_state (PhoasCmp op l r) = do v1 <- l
+                                           v2 <- r
+                                           return $ FoasCmp op v1 v2
+phoas_to_foas_state (PhoasNot p) = do r <- phoas_to_foas_state p
+                                      return $ FoasNot r
+phoas_to_foas_state (PhoasAnd p1 p2)    = binary_prop_to_foas_state p1 p2 FoasAnd
+phoas_to_foas_state (PhoasOr p1 p2)     = binary_prop_to_foas_state p1 p2 FoasOr
+phoas_to_foas_state (PhoasImplies p1 p2)= binary_prop_to_foas_state p1 p2 FoasImplies
+phoas_to_foas_state (PhoasExist m f)    = quantifiers_to_foas_state m f FoasExist
+phoas_to_foas_state (PhoasForall m f)   = quantifiers_to_foas_state m f FoasForall
+
+
+
+
+-- interprets a quantifier
+quantifiers_to_foas_state :: Maybe String -> ((StateInt Exp)->PhoasProp (StateInt Exp))->(LVar->FoasProp->FoasProp)->StateInt FoasProp
+quantifiers_to_foas_state  m f quantifier=do i <- get
+                                             let arg = "x" ++ show i 
+                                             case m of
+                                               Nothing -> do
+                                                   modify (+1)
+                                                   body <- (phoas_to_foas_state $ (f (return (Var arg))))
+                                                   return $ quantifier arg body
+                                               Just s -> do
+                                                   body <- (phoas_to_foas_state $ (f (return (Var s))))
+                                                   return $ quantifier s body
+
+
+
+--interprets a binary propositional operator.
+binary_prop_to_foas_state :: (PhoasProp (StateInt Exp))->(PhoasProp (StateInt Exp))->(FoasProp->FoasProp->FoasProp)->StateInt FoasProp
+binary_prop_to_foas_state p1 p2 bin = do r1 <- phoas_to_foas_state p1
+                                         r2 <- phoas_to_foas_state p2
+                                         return $ bin r1 r2
+
+
+
+
+
+
+
+
+
+
+
+phoas_to_hoas ::  PhoasProp Value-> Prop
+phoas_to_hoas PhoasT = T
+phoas_to_hoas PhoasF = F
+phoas_to_hoas (PhoasCmp op l r) = Cmp op l r
+phoas_to_hoas (PhoasNot p) = Not  (phoas_to_hoas p)
+phoas_to_hoas (PhoasAnd p1 p2)    = And (phoas_to_hoas p1) (phoas_to_hoas p2)
+phoas_to_hoas (PhoasOr p1 p2)     = Or (phoas_to_hoas p1) (phoas_to_hoas p2)
+phoas_to_hoas (PhoasImplies p1 p2)= Implies (phoas_to_hoas p1) (phoas_to_hoas p2)
+phoas_to_hoas (PhoasExist _ f)    = Exist (phoas_to_hoas . f)
+phoas_to_hoas (PhoasForall _ f)   = Forall (phoas_to_hoas . f)
+
 
 -- forall x, there exist y: x<y /\ 0<y
 phoas_example ::ValueAlgebra v => PhoasProp v
