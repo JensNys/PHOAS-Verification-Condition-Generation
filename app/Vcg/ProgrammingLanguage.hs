@@ -1,13 +1,13 @@
 {- HLINT ignore "Use camelCase" -}
 module Vcg.ProgrammingLanguage where
-
+import Data.Map 
 import Control.Monad.State
 -- here we define the program syntax and its semantics. 
 -- we also define the syntax and semantics for logic variables
 
 --type Var = String
 type Value = Int
-type (Store v) = [(X,v)]
+type (Store v) = Map X v-- [(X,v)]
 --program variables. They are immutable location
 type X = String
 --function names
@@ -67,26 +67,41 @@ popL ((_,_):l) = l
 
 
 
-
-lookupVarS:: X->StateT (Store Value) Maybe Value
-lookupVarS var = do env <- get
-                    case (Prelude.lookup var env) of
-                         Just a -> return a
-                         Nothing -> lift Nothing
+-- the monadic computation fails if we try to lookup a variable that is not in the store.
+lookupVarSfail:: X->StateT (Store Value) Maybe Value
+lookupVarSfail var = do env <- get
+                        case (Data.Map.lookup var env) of
+                            Just a -> return a
+                            Nothing -> lift Nothing
+-- the computation doesn't fail if we try to lookup a variable that is not in the store, it just returns Nothing.
+lookupVarSafe:: X->StateT (Store Value) Maybe (Maybe Value)
+lookupVarSafe var = do env <- get
+                       return (Data.Map.lookup var env) 
 putS :: X->Value -> StateT (Store Value) Maybe Value
-putS var c = state (\m -> (c,(var,c):m))
+putS var c = do env <- get
+                put (insert var c env)
+                return c
+
+restore :: X-> Maybe Value -> StateT (Store Value) Maybe ()
+restore var Nothing = do env <- get
+                         put (delete var env)
+restore var (Just val) = do env <- get
+                            put (insert var val env)
 
 
 
-assign :: X->Value -> StateT (Store Value) Maybe Value
-assign var c = state (\m -> (c,change var c m))
 
 
-pop :: StateT (Store Value) Maybe Value
-pop = state (\m -> (snd (head m),tail m))
 
-remove :: X-> StateT (Store Value) Maybe ()
-remove x = state (\m -> ((),deleteL x m))
+--assign :: X->Value -> StateT (Store Value) Maybe Value
+--assign var c = state (\m -> (c,insert var c m))
+
+
+--pop :: StateT (Store Value) Maybe Value
+--pop = state (\m -> (snd (head m),tail m))
+
+--remove :: X-> StateT (Store Value) Maybe ()
+--remove x = state (\m -> ((),deleteL x m))
 
 
 toFunc :: Relop -> (Int->Int->Bool)
@@ -109,7 +124,7 @@ interpb (Compare op s1 s2) = do x <- interp_exp s1
 
 interp_exp :: Exp->StateT (Store Value) Maybe Value
 interp_exp (Lit c) = return c
-interp_exp (Var a) = lookupVarS a
+interp_exp (Var a) = lookupVarSfail a
 interp_exp (Add s1 s2) = do x <- interp_exp s1
                             y <- interp_exp s2
                             return (x+y)
@@ -121,14 +136,17 @@ interp_exp (Minus s1 s2) = do x <- interp_exp s1
                               return (x-y)
 
 
+
+
 interp :: Stm -> StateT (Store Value) Maybe Value
 interp (Expr e) = interp_exp e
 interp (Assign var s) = do x <- interp_exp s -- it changes the variable in the valuation and
-                           assign var x --i don't use monad put here for now because it would return () instead of an integer. I could add in a later stage that it returns () but i have to take into account that computations "() + 4" would return a failed computation Nothing
+                           putS var x --i don't use monad put here for now because it would return () instead of an integer. I could add in a later stage that it returns () but i have to take into account that computations "() + 4" would return a failed computation Nothing
 interp (Let var s1 s2) = do x <- interp_exp s1 -- p -- in a later stage we could let this computation fail if x is already a variable.
-                            _ <- putS var x
+                            previous <- lookupVarSafe var
+                            putS var x
                             result <- interp s2
-                            remove var
+                            restore var previous
                             return result
 interp (Seq s1 s2) =do _ <- interp s1
                        interp s2
@@ -165,8 +183,8 @@ absoluteValue = Fun "abs" ["x"] (If (Compare LessThan (Var "x") (Lit 0)) (Expr (
 
 -- Program -> Parameters -> executed program.
 execute :: Prog -> [Value]-> Maybe Value
-execute (Fun _ l s) pars = fmap fst (runStateT (interp s) ((zip l pars)))
+execute (Fun _ l s) pars = fmap fst (runStateT (interp s) (fromList (zip l pars)))
 
 
 runStatement :: Stm -> Maybe (Value,(Store Value))
-runStatement s = (runStateT (interp s) [])
+runStatement s = (runStateT (interp s) empty)

@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE InstanceSigs #-}
 {- HLINT ignore "Use camelCase" -}
 module Vcg.PropositionLanguages where
 import Vcg.ProgrammingLanguage
@@ -73,6 +74,13 @@ instance ValueAlgebra Exp where
   minus = Minus
 
 
+instance ValueAlgebra DBExp where
+  lit = DBLit
+  add = DBAdd
+  mul = DBMul
+  minus :: DBExp -> DBExp -> DBExp
+  minus = DBMinus
+
 instance ValueAlgebra Int where
   lit = id
   add = (+)
@@ -82,6 +90,33 @@ instance ValueAlgebra Int where
 
 
 instance ValueAlgebra (Reader Int Exp) where
+  lit i = return $ Lit i
+  add x y = do v1 <- x
+               v2 <- y
+               return (Add v1 v2)
+  mul x y=  do v1 <- x
+               v2 <- y
+               return (Mul v1 v2)
+  minus x y=do v1 <- x
+               v2 <- y
+               return (Minus v1 v2)
+
+instance ValueAlgebra (Reader Int DBExp) where
+  lit i = return $ DBLit i
+  add :: Reader Int DBExp -> Reader Int DBExp -> Reader Int DBExp
+  add x y = do v1 <- x
+               v2 <- y
+               return (DBAdd v1 v2)
+  mul x y=  do v1 <- x
+               v2 <- y
+               return (DBMul v1 v2)
+  minus :: Reader Int DBExp -> Reader Int DBExp -> Reader Int DBExp
+  minus x y=do v1 <- x
+               v2 <- y
+               return (DBMinus v1 v2)
+
+
+instance ValueAlgebra (State Int Exp) where
   lit i = return $ Lit i
   add x y = do v1 <- x
                v2 <- y
@@ -106,6 +141,9 @@ phoasValue_to_foasValueReader (PVar rfv) = rfv -}
 
 example_2_scopes ::  PhoasProp a
 example_2_scopes = PhoasAnd (PhoasForall Nothing (\a -> PhoasCmp Equal a a)) (PhoasExist Nothing (\a-> PhoasCmp Equal a a ))
+
+example_db ::  PhoasProp a
+example_db = PhoasForall Nothing (\b -> PhoasAnd (PhoasForall Nothing (\a -> PhoasCmp Equal a b)) (PhoasCmp Equal b b)) 
 
 
 
@@ -274,7 +312,7 @@ phoas_to_db_reader (PhoasForall m f)   = quantifiers_to_db_reader m f DBForall
 -- interprets a quantifier
 quantifiers_to_db_reader :: Maybe String -> ((ReaderInt DBExp)->PhoasProp (ReaderInt DBExp))->(DBProp->DBProp)->ReaderInt DBProp
 quantifiers_to_db_reader  m f quantifier=do i <- ask
-                                            body <- (local (+1) $ phoas_to_db_reader $ (f (reader (\j -> DBVar (i-j+1)))))
+                                            body <- (local (+1) $ phoas_to_db_reader $ (f (reader (\j -> DBVar (j-(i+1))))))
                                             return $ quantifier body
                                                
 
