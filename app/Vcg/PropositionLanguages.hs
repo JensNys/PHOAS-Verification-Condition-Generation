@@ -53,8 +53,8 @@ data PhoasProp v = PhoasT
     | PhoasAnd (PhoasProp v) (PhoasProp v)
     | PhoasOr (PhoasProp v) (PhoasProp v)
     | PhoasImplies (PhoasProp v) (PhoasProp v)
-    | PhoasExist (Maybe String) (v->PhoasProp v)
-    | PhoasForall (Maybe String) (v->PhoasProp v)
+    | PhoasExist (v->PhoasProp v)
+    | PhoasForall (v->PhoasProp v)
 -- assumes the maybe string isn't of the form "x" ++ show i for an integer i.
 
 
@@ -140,10 +140,10 @@ phoasValue_to_foasValueReader (PVal v) = return $ FVal v
 phoasValue_to_foasValueReader (PVar rfv) = rfv -}
 
 example_2_scopes ::  PhoasProp a
-example_2_scopes = PhoasAnd (PhoasForall Nothing (\a -> PhoasCmp Equal a a)) (PhoasExist Nothing (\a-> PhoasCmp Equal a a ))
+example_2_scopes = PhoasAnd (PhoasForall  (\a -> PhoasCmp Equal a a)) (PhoasExist (\a-> PhoasCmp Equal a a ))
 
 example_db ::  PhoasProp a
-example_db = PhoasForall Nothing (\b -> PhoasAnd (PhoasForall Nothing (\a -> PhoasCmp Equal a b)) (PhoasCmp Equal b b)) 
+example_db = PhoasForall  (\b -> PhoasAnd (PhoasForall  (\a -> PhoasCmp Equal a b)) (PhoasCmp Equal b b)) 
 
 
 
@@ -165,24 +165,16 @@ phoas_to_foas_reader (PhoasNot p) = do r <- phoas_to_foas_reader p
 phoas_to_foas_reader (PhoasAnd p1 p2)    = binary_prop_to_foas_reader p1 p2 FoasAnd
 phoas_to_foas_reader (PhoasOr p1 p2)     = binary_prop_to_foas_reader p1 p2 FoasOr
 phoas_to_foas_reader (PhoasImplies p1 p2)= binary_prop_to_foas_reader p1 p2 FoasImplies
-phoas_to_foas_reader (PhoasExist m f)    = quantifiers_to_foas_reader m f FoasExist
-phoas_to_foas_reader (PhoasForall m f)   = quantifiers_to_foas_reader m f FoasForall
+phoas_to_foas_reader (PhoasExist f)    = quantifiers_to_foas_reader f FoasExist
+phoas_to_foas_reader (PhoasForall f)   = quantifiers_to_foas_reader f FoasForall
 
 -- interprets a quantifier
-quantifiers_to_foas_reader :: Maybe String -> ((ReaderInt Exp)->PhoasProp (ReaderInt Exp))->(LVar->FoasProp->FoasProp)->ReaderInt FoasProp
-quantifiers_to_foas_reader  m f quantifier=do i <- ask
-                                              let arg = "x" ++ show i
+quantifiers_to_foas_reader :: ((ReaderInt Exp)->PhoasProp (ReaderInt Exp))->(LVar->FoasProp->FoasProp)->ReaderInt FoasProp
+quantifiers_to_foas_reader f quantifier=do i <- ask
+                                           let arg = "x" ++ show i 
+                                           body <- (local (+1) $ phoas_to_foas_reader $ (f (return (Var arg))))
+                                           return $ quantifier arg body
 
-                                              case m of
-                                                Nothing -> do --no suggestion provided, we pick arg as our fresh variable and increment i with 1.
-                                                   body <- (local (+1) $ phoas_to_foas_reader $ (f (return (Var arg))))
-                                                   return $ quantifier arg body
-
-
-
-                                                Just s -> do -- a suggestion was provided, we use the suggestion.
-                                                   body <-              (phoas_to_foas_reader $ (f (return (Var s))))
-                                                   return $ quantifier s body
 
 
 
@@ -211,24 +203,20 @@ phoas_to_foas_state (PhoasNot p) = do r <- phoas_to_foas_state p
 phoas_to_foas_state (PhoasAnd p1 p2)    = binary_prop_to_foas_state p1 p2 FoasAnd
 phoas_to_foas_state (PhoasOr p1 p2)     = binary_prop_to_foas_state p1 p2 FoasOr
 phoas_to_foas_state (PhoasImplies p1 p2)= binary_prop_to_foas_state p1 p2 FoasImplies
-phoas_to_foas_state (PhoasExist m f)    = quantifiers_to_foas_state m f FoasExist
-phoas_to_foas_state (PhoasForall m f)   = quantifiers_to_foas_state m f FoasForall
+phoas_to_foas_state (PhoasExist f)    = quantifiers_to_foas_state f FoasExist
+phoas_to_foas_state (PhoasForall f)   = quantifiers_to_foas_state f FoasForall
 
 
 
 
 -- interprets a quantifier
-quantifiers_to_foas_state :: Maybe String -> ((StateInt Exp)->PhoasProp (StateInt Exp))->(LVar->FoasProp->FoasProp)->StateInt FoasProp
-quantifiers_to_foas_state  m f quantifier=do i <- get
-                                             let arg = "x" ++ show i 
-                                             case m of
-                                               Nothing -> do
-                                                   modify (+1)
-                                                   body <- (phoas_to_foas_state $ (f (return (Var arg))))
-                                                   return $ quantifier arg body
-                                               Just s -> do
-                                                   body <- (phoas_to_foas_state $ (f (return (Var s))))
-                                                   return $ quantifier s body
+quantifiers_to_foas_state ::  ((StateInt Exp)->PhoasProp (StateInt Exp))->(LVar->FoasProp->FoasProp)->StateInt FoasProp
+quantifiers_to_foas_state f quantifier=do i <- get
+                                          let arg = "x" ++ show i 
+                                          modify (+1)
+                                          body <- (phoas_to_foas_state $ (f (return (Var arg))))
+                                          return $ quantifier arg body
+                                            
 
 
 
@@ -251,8 +239,8 @@ phoas_to_foas_reader' (PhoasNot p) = do r <- phoas_to_foas_reader' p
 phoas_to_foas_reader' (PhoasAnd p1 p2)    = binary_prop_to_foas_reader' p1 p2 FoasAnd
 phoas_to_foas_reader' (PhoasOr p1 p2)     = binary_prop_to_foas_reader' p1 p2 FoasOr
 phoas_to_foas_reader' (PhoasImplies p1 p2)= binary_prop_to_foas_reader' p1 p2 FoasImplies
-phoas_to_foas_reader' (PhoasExist m f)    = quantifiers_to_foas_reader' m f FoasExist
-phoas_to_foas_reader' (PhoasForall m f)   = quantifiers_to_foas_reader' m f FoasForall
+phoas_to_foas_reader' (PhoasExist f)    = quantifiers_to_foas_reader' f FoasExist
+phoas_to_foas_reader' (PhoasForall f)   = quantifiers_to_foas_reader' f FoasForall
 
 binary_prop_to_foas_reader' :: (PhoasProp ( Exp))->(PhoasProp (Exp))->(FoasProp->FoasProp->FoasProp)->ReaderInt FoasProp
 binary_prop_to_foas_reader' p1 p2 bin = do r1 <- phoas_to_foas_reader' p1
@@ -260,17 +248,12 @@ binary_prop_to_foas_reader' p1 p2 bin = do r1 <- phoas_to_foas_reader' p1
                                            return $ bin r1 r2
 
 
-quantifiers_to_foas_reader' :: Maybe String -> (Exp->PhoasProp ( Exp))->(LVar->FoasProp->FoasProp)->ReaderInt FoasProp
-quantifiers_to_foas_reader'  m f quantifier=do i <- ask
-                                               let arg = "x" ++ show i
-                                               case m of
-                                                 Nothing -> do --no suggestion provided, we pick arg as our fresh variable and increment i with 1.
-                                                   body <- (local (+1) $ phoas_to_foas_reader' $ (f (Var arg)))
-                                                   return $ quantifier arg body
-                                                 Just s -> do --suggestion provided, we pick the suggestion as our argument
-                                                   body <-              (phoas_to_foas_reader' $ (f (Var s)))
-                                                   return $ quantifier s body
-
+quantifiers_to_foas_reader' ::  (Exp->PhoasProp ( Exp))->(LVar->FoasProp->FoasProp)->ReaderInt FoasProp
+quantifiers_to_foas_reader' f quantifier=do i <- ask
+                                            let arg = "x" ++ show i
+                                            --no suggestion provided, we pick arg as our fresh variable and increment i with 1.
+                                            body <- (local (+1) $ phoas_to_foas_reader' $ (f (Var arg)))
+                                            return $ quantifier arg body
 ---------------------------------- de bruijn
 data DBExp = DBLit Value
     | DBVar Int
@@ -306,16 +289,14 @@ phoas_to_db_reader (PhoasNot p) = do r <- phoas_to_db_reader p
 phoas_to_db_reader (PhoasAnd p1 p2)    = binary_prop_to_db_reader p1 p2 DBAnd
 phoas_to_db_reader (PhoasOr p1 p2)     = binary_prop_to_db_reader p1 p2 DBOr
 phoas_to_db_reader (PhoasImplies p1 p2)= binary_prop_to_db_reader p1 p2 DBImplies
-phoas_to_db_reader (PhoasExist m f)    = quantifiers_to_db_reader m f DBExist
-phoas_to_db_reader (PhoasForall m f)   = quantifiers_to_db_reader m f DBForall
+phoas_to_db_reader (PhoasExist f)    = quantifiers_to_db_reader f DBExist
+phoas_to_db_reader (PhoasForall f)   = quantifiers_to_db_reader f DBForall
 
 -- interprets a quantifier
-quantifiers_to_db_reader :: Maybe String -> ((ReaderInt DBExp)->PhoasProp (ReaderInt DBExp))->(DBProp->DBProp)->ReaderInt DBProp
-quantifiers_to_db_reader  m f quantifier=do i <- ask
-                                            body <- (local (+1) $ phoas_to_db_reader $ (f (reader (\j -> DBVar (j-(i+1))))))
-                                            return $ quantifier body
-                                               
-
+quantifiers_to_db_reader :: ((ReaderInt DBExp)->PhoasProp (ReaderInt DBExp))->(DBProp->DBProp)->ReaderInt DBProp
+quantifiers_to_db_reader  f quantifier=do i <- ask
+                                          body <- (local (+1) $ phoas_to_db_reader $ (f (reader (\j -> DBVar (j-(i+1))))))
+                                          return $ quantifier body
 
 
 --interprets a binary propositional operator.
@@ -348,13 +329,13 @@ phoas_to_hoas (PhoasNot p) = Not  (phoas_to_hoas p)
 phoas_to_hoas (PhoasAnd p1 p2)    = And (phoas_to_hoas p1) (phoas_to_hoas p2)
 phoas_to_hoas (PhoasOr p1 p2)     = Or (phoas_to_hoas p1) (phoas_to_hoas p2)
 phoas_to_hoas (PhoasImplies p1 p2)= Implies (phoas_to_hoas p1) (phoas_to_hoas p2)
-phoas_to_hoas (PhoasExist _ f)    = Exist (phoas_to_hoas . f)
-phoas_to_hoas (PhoasForall _ f)   = Forall (phoas_to_hoas . f)
+phoas_to_hoas (PhoasExist f)    = Exist (phoas_to_hoas . f)
+phoas_to_hoas (PhoasForall f)   = Forall (phoas_to_hoas . f)
 
 
 -- forall x, there exist y: x<y /\ 0<y
 phoas_example ::ValueAlgebra v => PhoasProp v
-phoas_example= PhoasForall Nothing (\x->PhoasExist Nothing (\y->(PhoasAnd (PhoasCmp LessThanEqual x y) (PhoasCmp LessThanEqual (lit 0) y))))
+phoas_example= PhoasForall (\x->PhoasExist (\y->(PhoasAnd (PhoasCmp LessThanEqual x y) (PhoasCmp LessThanEqual (lit 0) y))))
 
 foas_example :: FoasProp
 foas_example = FoasForall "x0" (FoasExist "x1" (FoasAnd (FoasCmp LessThanEqual (Var "x0") (Var "x1")) (FoasCmp LessThanEqual (Lit 0) (Var "x1"))))
@@ -371,8 +352,8 @@ foas_to_phoas' (FoasNot p) env =  PhoasNot  (foas_to_phoas' p env)
 foas_to_phoas' (FoasAnd p1 p2) env = PhoasAnd (foas_to_phoas' p1 env) (foas_to_phoas' p2 env)
 foas_to_phoas' (FoasOr p1 p2) env = PhoasOr (foas_to_phoas' p1 env) (foas_to_phoas' p2 env)
 foas_to_phoas' (FoasImplies p1 p2) env = PhoasImplies (foas_to_phoas' p1 env) (foas_to_phoas' p2 env)
-foas_to_phoas' (FoasExist lvar p ) env = PhoasExist (Just lvar) (\v -> foas_to_phoas' p (insert lvar v env))
-foas_to_phoas' (FoasForall lvar p) env = PhoasForall (Just lvar) (\v -> foas_to_phoas' p (insert lvar v env))
+foas_to_phoas' (FoasExist lvar p ) env = PhoasExist  (\v -> foas_to_phoas' p (insert lvar v env))
+foas_to_phoas' (FoasForall lvar p) env = PhoasForall  (\v -> foas_to_phoas' p (insert lvar v env))
 foas_to_phoas' (FoasCmp relop s1 s2) env = PhoasCmp relop (expression_to_algebra s1 env) (expression_to_algebra s2 env)
 
 expression_to_algebra :: ValueAlgebra a => Exp -> Map LVar a -> a
@@ -434,7 +415,7 @@ data FirstOrderContract = MkContract [LVar] (FoasProp) Prog [LVar] LVar FoasProp
   deriving (Eq,Show)
 --                universalQuantifications precondition Program Parameters ResultName storeNames Postcondition
 
-data Contract v =  ForallC (Maybe String) (v -> Contract v) -- forAll logicVariables {Precondition} Program {Int->Postcondition}
+data Contract v =  ForallC (v -> Contract v) -- forAll logicVariables {Precondition} Program {Int->Postcondition}
     | HoareTriple (PhoasProp v) Prog [v] (v->PhoasProp v)
 
 
@@ -442,7 +423,7 @@ firstOrderAbsContract :: FirstOrderContract
 firstOrderAbsContract=  MkContract ["x"] FoasT absoluteValue ["x"] "result" $ FoasAnd (FoasCmp GreaterThanEqual (Var "result") (Lit 0)) (FoasCmp GreaterThanEqual (Var "result") (Var "x"))
 
 absoluteValueContract :: ValueAlgebra v => Contract v
-absoluteValueContract = ForallC (Just "x") (\x->HoareTriple PhoasT absoluteValue [x] (\result->PhoasAnd (PhoasCmp GreaterThanEqual result (lit 0)) (PhoasCmp GreaterThanEqual result x)))
+absoluteValueContract = ForallC (\x->HoareTriple PhoasT absoluteValue [x] (\result->PhoasAnd (PhoasCmp GreaterThanEqual result (lit 0)) (PhoasCmp GreaterThanEqual result x)))
 
 
 
@@ -451,7 +432,7 @@ foas_to_phoas_contract :: ValueAlgebra v => FirstOrderContract -> Contract v
 foas_to_phoas_contract contract = foas_to_phoas_contract_env contract empty
 
 foas_to_phoas_contract_env :: ValueAlgebra v => FirstOrderContract ->M.Map LVar v -> Contract v
-foas_to_phoas_contract_env (MkContract (x:xs) precondition program variables result postcondition) env = ForallC (Just x) (\a -> foas_to_phoas_contract_env (MkContract xs precondition program variables result postcondition) (insert x a env))
+foas_to_phoas_contract_env (MkContract (x:xs) precondition program variables result postcondition) env = ForallC (\a -> foas_to_phoas_contract_env (MkContract xs precondition program variables result postcondition) (insert x a env))
 foas_to_phoas_contract_env (MkContract [] precondition program variables result postcondition) env =
    HoareTriple (foas_to_phoas' precondition env) program (fmap (env !) variables) (\r-> foas_to_phoas' postcondition (insert result r env))
 

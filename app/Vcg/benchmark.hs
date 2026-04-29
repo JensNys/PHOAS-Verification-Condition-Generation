@@ -28,7 +28,7 @@ benchmark_foas_to_phoas n = foas_to_phoas (benchmark_foas_prop n)
 
 benchmark_phoas_prop ::  Int -> PhoasProp v
 benchmark_phoas_prop 0 = PhoasT
-benchmark_phoas_prop i = PhoasExist Nothing (\var -> PhoasAnd (PhoasCmp Equal var var) (benchmark_phoas_prop (i-1)))
+benchmark_phoas_prop i = PhoasExist (\var -> PhoasAnd (PhoasCmp Equal var var) (benchmark_phoas_prop (i-1)))
 
 
 
@@ -48,7 +48,7 @@ benchmark_phoas_contract n = benchmark_phoas_contract_variables n []
 
 benchmark_phoas_contract_variables :: Int ->[v]-> Contract v
 benchmark_phoas_contract_variables 0 params = HoareTriple (benchmark_phoas_prop (length params)) (benchmark_program 0) params (\result -> benchmark_phoas_prop (length params))
-benchmark_phoas_contract_variables n params = ForallC Nothing (\var -> benchmark_phoas_contract_variables (n-1) (var:params))
+benchmark_phoas_contract_variables n params = ForallC  (\var -> benchmark_phoas_contract_variables (n-1) (var:params))
 
 
 

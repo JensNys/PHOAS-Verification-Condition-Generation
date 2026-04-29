@@ -26,11 +26,11 @@ instance Monad (Wpure v) where
 
 
 
-angelic :: ValueAlgebra v =>Maybe String -> Wpure v v
-angelic m = Wpure $ (\post-> PhoasExist m (\v->post v))
+angelic :: ValueAlgebra v =>Wpure v v
+angelic = Wpure $ (\post-> PhoasExist (\v->post v))
 
-demonic :: ValueAlgebra v => Maybe String -> Wpure v v
-demonic m = Wpure $ (\post-> PhoasForall m (\v->post v))
+demonic :: ValueAlgebra v =>Wpure v v
+demonic = Wpure $ (\post-> PhoasForall (\v->post v))
 
 
 
@@ -186,7 +186,7 @@ wp stm post initStore = (runWstore (exec stm)) post initStore
 
 
 vc :: ValueAlgebra v=>Contract v -> PhoasProp v
-vc (ForallC mstring f) = PhoasForall mstring (\v -> vc (f v))
+vc (ForallC f) = PhoasForall (\v -> vc (f v))
 vc (HoareTriple pre prog args post) = case prog of
   Fun _ params body -> PhoasImplies pre (wp body (\result _-> post result) (fromList (zip params args)))
 
