@@ -5,7 +5,10 @@ import Vcg.PropositionLanguages
 import Vcg.ConstraintGeneration
 
 
-main ::IO ()
-main =  makeCoqFile "absoluteValueContractFirstOrderInput" $ vcFoas firstOrderAbsContract
+import Vcg.Benchmark (runBenchmark)
+
+main :: IO ()
+main = runBenchmark
+--main =  makeCoqFile "absoluteValueContractFirstOrderInput" $ vcFoas_reader_exp firstOrderAbsContract
 
 

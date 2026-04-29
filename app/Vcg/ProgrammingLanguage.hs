@@ -15,6 +15,7 @@ type F = String
 
 
 data Prog = Fun F [X] Stm
+  deriving (Eq,Show)
 
 data Relop = Equal | LessThan | GreaterThan | LessThanEqual | GreaterThanEqual
   deriving (Eq)
@@ -77,10 +78,10 @@ lookupVarSfail var = do env <- get
 lookupVarSafe:: X->StateT (Store Value) Maybe (Maybe Value)
 lookupVarSafe var = do env <- get
                        return (Data.Map.lookup var env) 
-putS :: X->Value -> StateT (Store Value) Maybe Value
-putS var c = do env <- get
-                put (insert var c env)
-                return c
+insertS :: X->Value -> StateT (Store Value) Maybe Value
+insertS var c = do env <- get
+                   put (insert var c env)
+                   return c
 
 restore :: X-> Maybe Value -> StateT (Store Value) Maybe ()
 restore var Nothing = do env <- get
@@ -141,10 +142,10 @@ interp_exp (Minus s1 s2) = do x <- interp_exp s1
 interp :: Stm -> StateT (Store Value) Maybe Value
 interp (Expr e) = interp_exp e
 interp (Assign var s) = do x <- interp_exp s -- it changes the variable in the valuation and
-                           putS var x --i don't use monad put here for now because it would return () instead of an integer. I could add in a later stage that it returns () but i have to take into account that computations "() + 4" would return a failed computation Nothing
+                           insertS var x --i don't use monad put here for now because it would return () instead of an integer. I could add in a later stage that it returns () but i have to take into account that computations "() + 4" would return a failed computation Nothing
 interp (Let var s1 s2) = do x <- interp_exp s1 -- p -- in a later stage we could let this computation fail if x is already a variable.
                             previous <- lookupVarSafe var
-                            putS var x
+                            insertS var x
                             result <- interp s2
                             restore var previous
                             return result

@@ -431,6 +431,7 @@ foas_to_phoas    | PhoasForall (Maybe String) (v->(PhoasProp v)) -}
 
 -- the result variable should be named "Result"
 data FirstOrderContract = MkContract [LVar] (FoasProp) Prog [LVar] LVar FoasProp
+  deriving (Eq,Show)
 --                universalQuantifications precondition Program Parameters ResultName storeNames Postcondition
 
 data Contract v =  ForallC (Maybe String) (v -> Contract v) -- forAll logicVariables {Precondition} Program {Int->Postcondition}

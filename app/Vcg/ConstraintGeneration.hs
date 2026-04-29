@@ -8,7 +8,7 @@ import Vcg.ProgrammingLanguage
 import Vcg.PropositionLanguages
 --import Control.Monad.State
 import Control.Monad (liftM, ap)
-
+import Data.Map
 
 
 newtype Wpure v a = Wpure {runWpure :: (a->PhoasProp v)->PhoasProp v}
@@ -76,11 +76,32 @@ assume p = Wstore $ (\post store-> PhoasImplies p (post () store))
 evalStore ::ValueAlgebra v => Wstore v a ->(Store v)-> Wpure v a
 evalStore m store = Wpure $ (\post-> (runWstore m) (\a _->post a) store)
 
-pushStore ::ValueAlgebra v => X->v -> Wstore v ()
-pushStore x v = Wstore $ (\post store->post () (pushL x v store))
 
-popStore :: ValueAlgebra v =>Wstore v ()
-popStore = Wstore $ (\post store -> post () (popL store))
+
+
+
+insertStore ::ValueAlgebra v => X->v -> Wstore v ()
+insertStore x v = Wstore $ (\post store->post () (insert x v store))
+
+deleteStore ::ValueAlgebra v => X-> Wstore v ()
+deleteStore x = Wstore $ (\post store-> post () (delete x store))
+
+
+
+lookupWstore_fail ::ValueAlgebra v => X->Wstore v v
+lookupWstore_fail k = Wstore $ (\post store->case (Data.Map.lookup k store) of
+                                                Nothing -> PhoasF
+                                                Just value -> post value store)
+
+lookupWstore_safe ::ValueAlgebra v => X->Wstore v (Maybe v)
+lookupWstore_safe k = Wstore $ (\post store-> post (Data.Map.lookup k store) store)
+
+restoreWstore ::ValueAlgebra v => X-> Maybe v ->Wstore v ()
+restoreWstore var Nothing = deleteStore var
+restoreWstore var (Just val) = insertStore var val
+
+
+
 
 -- the cond parameter should be 
 matchBool_demonic :: ValueAlgebra v =>PhoasProp v-> Wstore v a-> Wstore v a-> Wstore v a
@@ -94,13 +115,9 @@ matchBool_angelic cond m1 m2= (do assert cond;m1)
                               (do assert (PhoasNot cond);m2)
 
 
-assignWstore ::ValueAlgebra v => X->v->Wstore v ()
-assignWstore x v = Wstore $ (\post store->post () (change x v store))
 
-lookupWstore ::ValueAlgebra v => X->Wstore v v
-lookupWstore a = Wstore $ (\post store->case (Prelude.lookup a store) of
-                                                Nothing -> PhoasF
-                                                Just value -> post value store)
+
+
 
 -- turns a boolean expression into the proposition that is equivalent to the expression in the monadic Wstore environment
 execb :: ValueAlgebra v=> Bexp->Wstore v (PhoasProp v)
@@ -113,7 +130,7 @@ execb (Compare op s1 s2) = do x <- exec_exp s1
 
 exec_exp :: ValueAlgebra v=> Exp->Wstore v v
 exec_exp (Lit c) = return $ lit c
-exec_exp (Var a) = lookupWstore a
+exec_exp (Var a) = lookupWstore_fail a
 exec_exp (Add s1 s2) = do x <- exec_exp s1
                           y <- exec_exp s2
                           return (add x y)
@@ -126,13 +143,14 @@ exec_exp (Minus s1 s2) = do x <- exec_exp s1
 
 exec :: ValueAlgebra v=> Stm->Wstore v v
 exec (Expr expr) = exec_exp expr
-exec (Assign var s) = do v <-exec_exp s
-                         assignWstore var v
+exec (Assign var s) = do v <- exec_exp s
+                         insertStore var v
                          return v
-exec (Let var s1 s2) = do x <- exec_exp s1 -- p -- in a later stage we could let this computation fail if x is already a variable.
-                          pushStore var x
+exec (Let var s1 s2) = do x <- exec_exp s1 -- p -- 
+                          previous <- lookupWstore_safe var
+                          insertStore var x
                           result <- exec s2
-                          popStore
+                          restoreWstore var previous
                           return result
 exec (Seq s1 s2) = do _ <- exec s1
                       exec s2
@@ -170,10 +188,21 @@ wp stm post initStore = (runWstore (exec stm)) post initStore
 vc :: ValueAlgebra v=>Contract v -> PhoasProp v
 vc (ForallC mstring f) = PhoasForall mstring (\v -> vc (f v))
 vc (HoareTriple pre prog args post) = case prog of
-  Fun _ params body -> PhoasImplies pre (wp body (\result _-> post result) (zip params args))
+  Fun _ params body -> PhoasImplies pre (wp body (\result _-> post result) (fromList (zip params args)))
 
 
-vcFoas :: FirstOrderContract -> FoasProp
-vcFoas  = phoas_to_foas . vc . foas_to_phoas_contract 
+vcFoas_reader_reader :: FirstOrderContract -> FoasProp
+vcFoas_reader_reader  = phoas_to_foas . vc . foas_to_phoas_contract 
+
+vcFoas_reader_exp :: FirstOrderContract -> FoasProp
+vcFoas_reader_exp  = phoas_to_foas_unfolded . vc . foas_to_phoas_contract
+
+vcFoas_state_state :: FirstOrderContract -> FoasProp
+vcFoas_state_state  = phoas_to_foas_global . vc . foas_to_phoas_contract
+
+--vcFoas_state_exp :: FirstOrderContract -> FoasProp
+--vcFoas_state_exp  = phoas_to_foas . vc . foas_to_phoas_contract
 
 
+vcFoas_db :: FirstOrderContract -> DBProp
+vcFoas_db  = phoas_to_db . vc . foas_to_phoas_contract
