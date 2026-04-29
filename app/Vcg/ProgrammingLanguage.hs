@@ -42,6 +42,7 @@ data Stm = Expr Exp
     | Let X Stm Stm -- let X = Stm where Stm (make a new variable)
     | Seq Stm Stm --e1;e2
     | If Bexp Stm Stm -- if bexp then stm else stm
+    | Recurse [Stm]
   deriving (Eq,Show)
 
 
@@ -78,6 +79,37 @@ lookupVarSfail var = do env <- get
 lookupVarSafe:: X->StateT (Store Value) Maybe (Maybe Value)
 lookupVarSafe var = do env <- get
                        return (Data.Map.lookup var env) 
+
+{- getCurrentBindings :: [X] -> StateT (Store Value) Maybe ([Maybe Value])
+getCurrentBindings l = getCurrentBindings' l []
+
+getCurrentBindings' :: [X] -> [Value]-> StateT (Store Value) Maybe [Maybe Value]
+getCurrentBindings' (x:l) acc = do v <- lookupVarSafe x 
+                                   getCurrentBindings' l (v:acc)
+getCurrentBindings' [] acc = return acc
+
+
+restoreCurrentBindings :: [(X,Maybe Value)] -> StateT (Store Value) Maybe ()
+restoreCurrentBindings l = getCurrentBindings' l [] -}
+
+
+
+--getAllBindings :: StateT (Store Value) Maybe (Store Value)
+--getAllBindings = get
+
+--replaceAllBindings = (\store -> (,empty))
+
+--restoreAllBindings :: (Store Value) -> StateT (Store Value) Maybe (Store Value)
+--restoreAllBindings = put
+
+--restoreCurrentBindings' :: [X] -> [Value]-> StateT (Store Value) Maybe [Maybe Value]
+--restoreCurrentBindings' ((key,value):l) acc = do v <- restore
+--                                       getCurrentBindings' l (v:acc)
+--restoreCurrentBindings' [] acc = return acc
+
+
+
+
 insertS :: X->Value -> StateT (Store Value) Maybe Value
 insertS var c = do env <- get
                    put (insert var c env)
@@ -139,20 +171,40 @@ interp_exp (Minus s1 s2) = do x <- interp_exp s1
 
 
 
-interp :: Stm -> StateT (Store Value) Maybe Value
-interp (Expr e) = interp_exp e
-interp (Assign var s) = do x <- interp_exp s -- it changes the variable in the valuation and
-                           insertS var x --i don't use monad put here for now because it would return () instead of an integer. I could add in a later stage that it returns () but i have to take into account that computations "() + 4" would return a failed computation Nothing
-interp (Let var s1 s2) = do x <- interp s1 
-                            previous <- lookupVarSafe var
-                            insertS var x
-                            result <- interp s2
-                            restore var previous
-                            return result
-interp (Seq s1 s2) =do _ <- interp s1
-                       interp s2
-interp (If bexp s1 s2) = do b <- interpb bexp
-                            if b then (interp s1) else (interp s2)
+interp_list' :: [Stm]->[Value]->Prog-> StateT (Store Value) Maybe [Value]
+interp_list' (stm:rest) acc prog = do v <- (interp stm prog)
+                                      interp_list' rest (v:acc) prog
+interp_list' [] acc prog = return acc
+
+interp_list :: [Stm]->Prog-> StateT (Store Value) Maybe [Value]
+interp_list l prog = interp_list' l [] prog
+
+
+interp :: Stm ->Prog-> StateT (Store Value) Maybe Value
+interp (Expr e) p = interp_exp e
+interp (Assign var s) p = do x <- interp_exp s -- it changes the variable in the valuation and
+                             insertS var x --i don't use monad put here for now because it would return () instead of an integer. I could add in a later stage that it returns () but i have to take into account that computations "() + 4" would return a failed computation Nothing
+interp (Let var s1 s2) p = do x <- interp s1 p
+                              previous <- lookupVarSafe var
+                              insertS var x
+                              result <- interp s2 p
+                              restore var previous
+                              return result
+interp (Seq s1 s2) p =do _ <- interp s1 p
+                         interp s2 p
+interp (If bexp s1 s2) p = do b <- interpb bexp
+                              if b then (interp s1 p) else (interp s2 p)
+interp (Recurse stmlist) (Fun n paramnames stm) = do 
+                                state_before_call <- get --save the current state
+                                valueList <- interp_list stmlist (Fun n paramnames stm) -- compute the values the function will be called with
+                                put (fromList (zip paramnames valueList)) -- bind the parameters to the store and interpret with that
+                                result <- interp stm (Fun n paramnames stm) -- execute the body
+                                put state_before_call --restore the state
+                                return result --return the result
+                                
+  
+  
+
 
 
 
@@ -181,11 +233,19 @@ absoluteValueStm = Let "x" (Expr (Lit (-5))) (If (Compare LessThan (Var "x") ( (
 absoluteValue :: Prog
 absoluteValue = Fun "abs" ["x"] (If (Compare LessThan (Var "x") (Lit 0)) (Expr (Minus (Lit 0) (Var "x"))) (Expr (Var "x")))
 
+mySum :: Prog
+mySum  = Fun "sum" ["x"] (If (Compare Equal (Lit 0) (Var "x")) 
+                                  (Expr (Lit 0))
+                                  (Recurse [Expr (Minus (Var "x") (Lit 1))]))
+
+runSum :: Int -> Maybe Int
+runSum n = execute mySum [n]
 
 -- Program -> Parameters -> executed program.
+
 execute :: Prog -> [Value]-> Maybe Value
-execute (Fun _ l s) pars = fmap fst (runStateT (interp s) (fromList (zip l pars)))
+execute (Fun name l s) pars = fmap fst (runStateT (interp s (Fun name l s)) (fromList (zip l pars)))
 
 
 runStatement :: Stm -> Maybe (Value,(Store Value))
-runStatement s = (runStateT (interp s) empty)
+runStatement s = (runStateT (interp s (Fun "" [] s)) empty)
