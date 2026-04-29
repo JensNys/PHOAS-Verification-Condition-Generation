@@ -38,7 +38,7 @@ benchmark_phoas_prop i = PhoasExist Nothing (\var -> PhoasAnd (PhoasCmp Equal va
 -- benchmark_stm n assumes there are already n variables named ("i" ++ show k) with k<=n in scope, has n Let introductions, n assignments, and 2n variable lookups
 benchmark_stm :: Int -> Stm
 benchmark_stm 0 = Expr (Lit 0)
-benchmark_stm n = Let ("l" ++ show n) (Var ("i" ++ show n)) (Seq (Assign ("l" ++ show n) (Add (Var ("l" ++ show n)) (Lit 1)) ) (benchmark_stm (n-1)))
+benchmark_stm n = Let ("l" ++ show n) (Expr (Var ("i" ++ show n))) (Seq (Assign ("l" ++ show n) (Add (Var ("l" ++ show n)) (Lit 1)) ) (benchmark_stm (n-1)))
 
 benchmark_program :: Int -> Prog
 benchmark_program n =Fun "f" (map (\i -> "i" ++ show i) [1 .. n]) (benchmark_stm n)

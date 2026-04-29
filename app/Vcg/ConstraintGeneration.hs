@@ -146,7 +146,7 @@ exec (Expr expr) = exec_exp expr
 exec (Assign var s) = do v <- exec_exp s
                          insertStore var v
                          return v
-exec (Let var s1 s2) = do x <- exec_exp s1 -- p -- 
+exec (Let var s1 s2) = do x <- exec s1 -- p -- 
                           previous <- lookupWstore_safe var
                           insertStore var x
                           result <- exec s2

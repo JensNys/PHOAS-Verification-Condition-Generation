@@ -39,7 +39,7 @@ data Exp = Lit Value
   
 data Stm = Expr Exp
     | Assign X Exp -- x := Stm (update a variable)
-    | Let X Exp Stm -- let X = Stm where Stm (make a new variable)
+    | Let X Stm Stm -- let X = Stm where Stm (make a new variable)
     | Seq Stm Stm --e1;e2
     | If Bexp Stm Stm -- if bexp then stm else stm
   deriving (Eq,Show)
@@ -143,7 +143,7 @@ interp :: Stm -> StateT (Store Value) Maybe Value
 interp (Expr e) = interp_exp e
 interp (Assign var s) = do x <- interp_exp s -- it changes the variable in the valuation and
                            insertS var x --i don't use monad put here for now because it would return () instead of an integer. I could add in a later stage that it returns () but i have to take into account that computations "() + 4" would return a failed computation Nothing
-interp (Let var s1 s2) = do x <- interp_exp s1 -- p -- in a later stage we could let this computation fail if x is already a variable.
+interp (Let var s1 s2) = do x <- interp s1 
                             previous <- lookupVarSafe var
                             insertS var x
                             result <- interp s2
@@ -163,19 +163,19 @@ interp (If bexp s1 s2) = do b <- interpb bexp
 
 -- examples
 add_5_to_1_with_var :: Stm
-add_5_to_1_with_var = Let "x" ((Lit 5)) (Expr (Add (Var "x") (Lit 1)))
+add_5_to_1_with_var = Let "x" (Expr (Lit 5)) (Expr (Add (Var "x") (Lit 1)))
 
 testingScope :: Stm
-testingScope = Let "x" ((Lit 5)) (Seq (Assign "x" ( (Lit 1))) (Expr (Var "x")))
+testingScope = Let "x" (Expr (Lit 5)) (Seq (Assign "x" ( (Lit 1))) (Expr (Var "x")))
 
 testingScope2 :: Stm
-testingScope2 = Seq (Let "x" ((Lit 5)) (Expr (Lit 5))) (Expr (Lit 7))
+testingScope2 = Seq (Let "x" (Expr (Lit 5)) (Expr (Lit 5))) (Expr (Lit 7))
 
 testingScope3 :: Stm
-testingScope3 = Let "y" (Lit 2) (Let "x" (Lit 3) (Seq (Let "y" (Lit 4) (Assign "x" ((Lit 2)))) (Expr (Add (Var "x") (Var "y")))))
+testingScope3 = Let "y" (Expr (Lit 2)) (Let "x" (Expr (Lit 3)) (Seq (Let "y" (Expr (Lit 4)) (Assign "x" ( (Lit 2)))) (Expr (Add (Var "x") (Var "y")))))
 
 absoluteValueStm :: Stm
-absoluteValueStm = Let "x" (Lit (-5)) (If (Compare LessThan (Var "x") (Lit 0)) (Expr (Minus (Lit 0) (Var "x"))) (Expr (Var "x")))
+absoluteValueStm = Let "x" (Expr (Lit (-5))) (If (Compare LessThan (Var "x") ( (Lit 0))) (Expr (Minus ( (Lit 0)) (Var "x"))) (Expr (Var "x")))
 
 
 absoluteValue :: Prog
