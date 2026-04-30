@@ -470,11 +470,11 @@ showCoqExp (Mul s1 s2) = "(Z.mul "++ showCoqExp s1 ++ " " ++ showCoqExp s2 ++ ")
 showCoqExp (Minus s1 s2) = "(Z.sub "++ showCoqExp s1 ++ " " ++ showCoqExp s2 ++ ")"
 
 makeCoqTheorem :: String -> FoasProp->String
-makeCoqTheorem name formula = "Theorem "++name++" :\n" ++ foas_to_coq_formula formula ++".\nProof.\nlia.\nQed."
+makeCoqTheorem name formula = "Theorem "++name++" :\n" ++ foas_to_coq_formula formula ++".\nProof.\neauto 10 with arith_hints.\nQed."
 
 
 makeCoqFileContent :: String -> FoasProp->String
-makeCoqFileContent name formula = "Require Import ZArith.\nRequire Import Lia.\nOpen Scope Z_scope.\n\n" ++ makeCoqTheorem name formula
+makeCoqFileContent name formula = "Require Import ZArith Psatz.\nOpen Scope Z_scope.\n#[local] Hint Extern 1 => nia : arith_hints.\n\n" ++ makeCoqTheorem name formula
 
 
 
