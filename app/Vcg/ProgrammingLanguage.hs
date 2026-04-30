@@ -236,7 +236,8 @@ absoluteValue = Fun "abs" ["x"] (If (Compare LessThan (Var "x") (Lit 0)) (Expr (
 mySum :: Prog
 mySum  = Fun "sum" ["x"] (If (Compare Equal (Lit 0) (Var "x")) 
                                   (Expr (Lit 0))
-                                  (Recurse [Expr (Minus (Var "x") (Lit 1))]))
+                                  (Let "sum_until_x_min_1" (Recurse [Expr (Minus (Var "x") (Lit 1))]) 
+                                    (Expr (Add (Var "x") (Var "sum_until_x_min_1")))))
 
 runSum :: Int -> Maybe Int
 runSum n = execute mySum [n]
