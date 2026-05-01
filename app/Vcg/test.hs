@@ -28,4 +28,7 @@ test5 = TestCase (assertEqual "test phoas_to_foas" (phoas_to_foas phoas_example)
 test6 :: Test 
 test6 = TestCase (assertEqual "test foas_to_phoas" (phoas_to_foas (foas_to_phoas foas_example)) (foas_example))
 test7 :: Test
-test7 = TestCase (assertEqual "test Contract conversion" (vcFoas_reader_reader firstOrderAbsContract) (phoas_to_foas $ vc absoluteValueContract firstOrderAbsContract))
+test7 = TestCase (assertEqual "test Contract conversion" (vcFoas_reader_reader firstOrderAbsContract) (phoas_to_foas $ vc absoluteValueContract))
+
+
+

@@ -145,21 +145,21 @@ exec_exp (Minus s1 s2) = do x <- exec_exp s1
                             y <- exec_exp s2
                             return (minus x y)
 
-exec_list :: ValueAlgebra v=> [Stm]->FirstOrderContract->Wstore v [v]
+exec_list :: ValueAlgebra v=> [Stm]->Contract v->Wstore v [v]
 exec_list l c = exec_list' l [] c
 
-exec_list' :: ValueAlgebra v=> [Stm]->[v]->FirstOrderContract->Wstore v [v]
+exec_list' :: ValueAlgebra v=> [Stm]->[v]->Contract v->Wstore v [v]
 exec_list' (stm:rest) acc c = do v <- (exec stm c)
                                  exec_list' rest (v:acc) c
 exec_list' [] acc c = return acc
 
 
-angelicList' :: ValueAlgebra v =>  [LVar] ->[( LVar, v)]-> FirstOrderContract->Wstore v [( LVar, v)]
+angelicList' :: ValueAlgebra v =>  [LVar] ->[( LVar, v)]-> Contract v->Wstore v [( LVar, v)]
 angelicList' (lvar:rest) acc c = do v <- angelic
                                     angelicList' rest ((lvar,v):acc) c
 angelicList' [] acc c = return acc
 
-angelicList ::ValueAlgebra v =>  [LVar] ->FirstOrderContract-> Wstore v (Map LVar v)
+angelicList ::ValueAlgebra v =>  [LVar] ->Contract v-> Wstore v (Map LVar v)
 angelicList l c = do list <- angelicList' l [] c
                      return (fromList list)
 
@@ -169,7 +169,7 @@ interpret_with m lvars = Data.Maybe.mapMaybe (\lvar -> Map.lookup lvar m) lvars
 
 
 
-exec :: ValueAlgebra v=> Stm->FirstOrderContract->Wstore v v
+exec :: ValueAlgebra v=> Stm->Contract v->Wstore v v
 exec (Expr expr) c= exec_exp expr
 exec (Assign var s) c = do v <- exec_exp s
                            insertStore var v
@@ -184,17 +184,34 @@ exec (Seq s1 s2) c = do _ <- exec s1 c
                         exec s2 c
 exec (If bexp s1 s2) c = do b <- execb bexp
                             matchBool_demonic b (exec s1 c) (exec s2 c)
-exec (Recurse stmList) (MkContract quantifiers pre (Fun funName varnames stm) inputs resultname post) = 
-          do value_list <- exec_list stmList (MkContract quantifiers pre (Fun funName varnames stm) inputs resultname post)
-             valuation <- angelicList quantifiers  (MkContract quantifiers pre (Fun funName varnames stm) inputs resultname post)
-             assert (Prelude.foldr PhoasAnd PhoasT (zipWith (PhoasCmp Equal) value_list (interpret_with valuation inputs)))--the inputs in value_list are equal to the provided inputs.
-             assert (foas_to_phoas' pre valuation )
-             v_result <- demonic
-             assume (foas_to_phoas' post (insert resultname v_result valuation) )
-             return v_result
+exec (Recurse stmList) c = 
+          do 
+            exec_recursion (Recurse stmList) c c []
+
+
+
                       
+allEqual :: [v]->[v]-> PhoasProp v
+allEqual l1 l2 = Prelude.foldr PhoasAnd PhoasT (zipWith (PhoasCmp Equal) l1 l2)
 
 
+
+exec_recursion ::ValueAlgebra v=> Stm->Contract v->Contract v ->[v]-> Wstore v v
+exec_recursion (Recurse stmList) (ForallC f) c acc =
+          do v <- angelic
+             exec_recursion (Recurse stmList) (f v) c (v:acc)
+exec_recursion (Recurse stmList) (HoareTriple pre (Fun funName varnames stm) inputs post) c angelicValues=
+          do value_list <- exec_list stmList c
+             assert (allEqual angelicValues value_list)
+             assert pre
+             v_result <- demonic
+             assume (post v_result)
+             return v_result
+
+exec_recursion stm c1 c2 acc = do block -- this function should only be called when there is recursion
+
+--- recurse over PHOAS contract with angelics. remove assert (Prelude.foldr PhoasAnd PhoasT (zipWith (PhoasCmp Equal) value_list (interpret_with valuation inputs)))--the inputs in value_list are equal to the provided inputs.
+-- you can just assert pre and (post v_result)
 
 
 
@@ -240,29 +257,32 @@ observationPartial r = Wstore $ (\post s0-> case ((runStateT r) s0) of
 
 -- Print Scope type_scope. Coq
 
-wp :: ValueAlgebra v=>Stm -> (v->Store v->PhoasProp v)->Store v->FirstOrderContract->PhoasProp v
-wp stm post initStore fc = (runWstore (exec stm fc)) post initStore
+wp :: ValueAlgebra v=>Stm -> (v->Store v->PhoasProp v)->Store v->Contract v->PhoasProp v
+wp stm post initStore c = (runWstore (exec stm c)) post initStore
 
 
 
 
-vc :: ValueAlgebra v=>Contract v ->FirstOrderContract-> PhoasProp v
-vc (ForallC f) fc= PhoasForall (\v -> vc (f v) fc)
-vc (HoareTriple pre prog args post) fc = case prog of
-  Fun _ params body -> PhoasImplies pre (wp body (\result _-> post result) (fromList (zip params args)) fc)
+vc' :: ValueAlgebra v=>Contract v ->Contract v -> PhoasProp v
+vc' (ForallC f) c = PhoasForall (\v -> vc' (f v) c)
+vc' (HoareTriple pre prog args post) c= case prog of
+  Fun _ params body -> PhoasImplies pre (wp body (\result _-> post result) (fromList (zip params args)) c )
+
+vc:: ValueAlgebra v=>Contract v -> PhoasProp v
+vc c = vc' c c
 
 
 vcFoas_reader_reader :: FirstOrderContract -> FoasProp
-vcFoas_reader_reader  fc = phoas_to_foas $ vc (foas_to_phoas_contract fc) fc
+vcFoas_reader_reader  = phoas_to_foas . vc . foas_to_phoas_contract 
 
 vcFoas_reader_exp :: FirstOrderContract -> FoasProp
-vcFoas_reader_exp fc = phoas_to_foas_unfolded  (vc (foas_to_phoas_contract fc) fc)
+vcFoas_reader_exp = phoas_to_foas_unfolded . vc . foas_to_phoas_contract
 vcFoas_state_state :: FirstOrderContract -> FoasProp
-vcFoas_state_state fc = phoas_to_foas_global $ vc (foas_to_phoas_contract fc) fc
+vcFoas_state_state = phoas_to_foas_global . vc . foas_to_phoas_contract 
 
 --vcFoas_state_exp :: FirstOrderContract -> FoasProp
 --vcFoas_state_exp  = phoas_to_foas $ vc (foas_to_phoas_contract fc) fc
 
 
 vcFoas_db :: FirstOrderContract -> DBProp
-vcFoas_db  fc = phoas_to_db $ vc (foas_to_phoas_contract fc) fc
+vcFoas_db   = phoas_to_db . vc . foas_to_phoas_contract 
