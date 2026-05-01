@@ -230,22 +230,14 @@ absoluteValueStm :: Stm
 absoluteValueStm = Let "x" (Expr (Lit (-5))) (If (Compare LessThan (Var "x") ( (Lit 0))) (Expr (Minus ( (Lit 0)) (Var "x"))) (Expr (Var "x")))
 
 
-absoluteValue :: Prog
-absoluteValue = Fun "abs" ["x"] (If (Compare LessThan (Var "x") (Lit 0)) (Expr (Minus (Lit 0) (Var "x"))) (Expr (Var "x")))
-
-mySum :: Prog
-mySum  = Fun "sum" ["x"] (If (Compare Equal (Lit 0) (Var "x")) 
-                                  (Expr (Lit 0))
-                                  (Let "sum_until_x_min_1" (Recurse [Expr (Minus (Var "x") (Lit 1))]) 
-                                    (Expr (Add (Var "x") (Var "sum_until_x_min_1")))))
-
-runSum :: Int -> Maybe Int
-runSum n = execute mySum [n]
 
 -- Program -> Parameters -> executed program.
 
 execute :: Prog -> [Value]-> Maybe Value
 execute (Fun name l s) pars = fmap fst (runStateT (interp s (Fun name l s)) (fromList (zip l pars)))
+
+
+
 
 
 runStatement :: Stm -> Maybe (Value,(Store Value))

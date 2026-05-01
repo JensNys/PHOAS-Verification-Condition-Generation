@@ -150,7 +150,7 @@ exec_list l c = exec_list' l [] c
 
 exec_list' :: ValueAlgebra v=> [Stm]->[v]->Contract v->Wstore v [v]
 exec_list' (stm:rest) acc c = do v <- (exec stm c)
-                                 exec_list' rest (v:acc) c
+                                 exec_list' rest (acc ++ [v]) c
 exec_list' [] acc c = return acc
 
 
@@ -186,7 +186,7 @@ exec (If bexp s1 s2) c = do b <- execb bexp
                             matchBool_demonic b (exec s1 c) (exec s2 c)
 exec (Recurse stmList) c = 
           do 
-            exec_recursion (Recurse stmList) c c []
+            exec_recursion (Recurse stmList) c c
 
 
 
@@ -196,22 +196,21 @@ allEqual l1 l2 = Prelude.foldr PhoasAnd PhoasT (zipWith (PhoasCmp Equal) l1 l2)
 
 
 
-exec_recursion ::ValueAlgebra v=> Stm->Contract v->Contract v ->[v]-> Wstore v v
-exec_recursion (Recurse stmList) (ForallC f) c acc =
+exec_recursion ::ValueAlgebra v=> Stm->Contract v->Contract v -> Wstore v v
+exec_recursion (Recurse stmList) (ForallC f) c =
           do v <- angelic
-             exec_recursion (Recurse stmList) (f v) c (v:acc)
-exec_recursion (Recurse stmList) (HoareTriple pre (Fun funName varnames stm) inputs post) c angelicValues=
+             exec_recursion (Recurse stmList) (f v) c
+exec_recursion (Recurse stmList) (HoareTriple pre (Fun funName varnames stm) inputs post) c =
           do value_list <- exec_list stmList c
-             assert (allEqual angelicValues value_list)
+             assert (allEqual inputs value_list)
              assert pre
              v_result <- demonic
              assume (post v_result)
              return v_result
 
-exec_recursion stm c1 c2 acc = do block -- this function should only be called when there is recursion
+exec_recursion stm c1 c2  = do block -- this function should only be called when there is recursion
 
---- recurse over PHOAS contract with angelics. remove assert (Prelude.foldr PhoasAnd PhoasT (zipWith (PhoasCmp Equal) value_list (interpret_with valuation inputs)))--the inputs in value_list are equal to the provided inputs.
--- you can just assert pre and (post v_result)
+
 
 
 

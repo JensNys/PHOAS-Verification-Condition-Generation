@@ -7,6 +7,7 @@ import Vcg.ProgrammingLanguage
 import Control.Monad.Reader
 import Data.Map as M
 import Control.Monad.State
+import Documentation.SBV.Examples.Transformers.SymbolicEval (Env(result))
 
 
 
@@ -419,18 +420,6 @@ data Contract v =  ForallC (v -> Contract v) -- forAll logicVariables {Precondit
     | HoareTriple (PhoasProp v) Prog [v] (v->PhoasProp v)
 
 
-firstOrderAbsContract :: FirstOrderContract
-firstOrderAbsContract=  MkContract ["x"] FoasT absoluteValue ["x"] "result" $ FoasAnd (FoasCmp GreaterThanEqual (Var "result") (Lit 0)) (FoasCmp GreaterThanEqual (Var "result") (Var "x"))
-
-absoluteValueContract :: ValueAlgebra v => Contract v
-absoluteValueContract = ForallC (\x->HoareTriple PhoasT absoluteValue [x] (\result->PhoasAnd (PhoasCmp GreaterThanEqual result (lit 0)) (PhoasCmp GreaterThanEqual result x)))
-
-mySumFoasContract :: FirstOrderContract
-mySumFoasContract = MkContract ["in"] (FoasCmp GreaterThanEqual (Var "in") (Lit 0)) mySum ["in"] "result" (FoasCmp Equal (Mul (Lit 2) (Var "result")) (Mul (Var "in") (Add (Var "in") (Lit 1))))
-
-mySumContract :: ValueAlgebra v => Contract v
-mySumContract = ForallC (\inp -> HoareTriple (PhoasCmp GreaterThanEqual inp (lit 0)) mySum [inp] (\result  -> PhoasCmp Equal (mul (lit 2) result) (mul inp (add inp (lit 1)))))
-  
 
 foas_to_phoas_contract :: ValueAlgebra v => FirstOrderContract -> Contract v
 foas_to_phoas_contract contract = foas_to_phoas_contract_env contract empty
