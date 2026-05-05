@@ -2,9 +2,7 @@ module Vcg.ExampleContracts where
 
 import Vcg.ProgrammingLanguage
 import Vcg.PropositionLanguages
-import Vcg.ConstraintGeneration
 
-import Data.Maybe
 
 
 
@@ -34,13 +32,22 @@ test = putStrLn $ prettyPrint $ phoas_to_foas $ vc succContract -}
 
 
 absoluteValue :: Prog
-absoluteValue = Fun "abs" ["x"] (If (Compare LessThan (Var "x") (Lit 0)) (Expr (Minus (Lit 0) (Var "x"))) (Expr (Var "x")))
+absoluteValue = Fun "abs" ["x"] 
+                (If (Compare LessThan (Var "x") (Lit 0)) 
+                    (Expr (Minus (Lit 0) (Var "x"))) 
+                    (Expr (Var "x")))
 
 mySum :: Prog
 mySum  = Fun "sum" ["x"] (If (Compare Equal (Lit 0) (Var "x")) 
                                   (Expr (Lit 0))
-                                  (Let "sum_until_x_min_1" (Recurse [Expr (Minus (Var "x") (Lit 1))]) 
-                                    (Expr (Add (Var "x") (Var "sum_until_x_min_1")))))
+                                  (Let "recursive_result" (Recurse [Expr (Minus (Var "x") (Lit 1))]) 
+                                    (Expr (Add (Var "x") (Var "recursive_result")))))
+
+
+infiniteProg :: Prog
+infiniteProg = Fun "infinite" ["x"] (Recurse [Expr (Var "x")])
+
+
 
 runSum :: Int -> Maybe Int
 runSum n = execute mySum [n]
@@ -54,32 +61,81 @@ modulo = Fun "mod" ["a", "b"]
       (Expr (Var "a"))
       (Recurse [Expr (Minus (Var "a") (Var "b")), Expr (Var "b")]))
 
+exp :: Prog
+exp = Fun "mod" ["a", "b"]
+  (If (Compare LessThan (Var "a") (Var "b"))
+      (Expr (Var "a"))
+      (Recurse [Expr (Minus (Var "a") (Var "b")), Expr (Var "b")]))
 
-      
+max :: Prog
+max = Fun "maximum" ["a", "b"]
+                (If (Compare GreaterThanEqual (Var "a") (Var "b")) 
+                    (Expr (Var "a")) 
+                    (Expr (Var "b")))
+
+maxAdditionContract :: FirstOrderContract
+maxAdditionContract = MkContract ["x","y"] -- quantifiers
+                                ( (FoasCmp LessThanEqual (Lit 0) (Var "x"))
+                                         ) -- precondition
+
+                                Vcg.ExampleContracts.max [(Add (Var "x") (Var "y")) , Var "y"] --program and its parameters
+                                
+                                "result" --name of the result in the postcondition                      
+                                ( (FoasCmp Equal (Var "result") (Add (Var "x") (Var "y")))) --postcondition
+
+
+maxAdditionContractPhoas :: ValueAlgebra v => Contract v
+maxAdditionContractPhoas  = ForallC (\x -> ForallC (\y -> 
+                                  HoareTriple (PhoasCmp LessThanEqual (lit 0) x) 
+                                              Vcg.ExampleContracts.max [add x y, y]
+                                              (\result -> PhoasCmp Equal result (add x y))))
+
+
 
 firstOrderAbsContract :: FirstOrderContract
-firstOrderAbsContract=  MkContract ["x"] FoasT absoluteValue ["x"] "result" $ FoasAnd (FoasCmp GreaterThanEqual (Var "result") (Lit 0)) (FoasCmp GreaterThanEqual (Var "result") (Var "x"))
+firstOrderAbsContract=  MkContract ["x"] FoasT absoluteValue [Var "x"] "result" $ FoasAnd (FoasCmp GreaterThanEqual (Var "result") (Lit 0)) (FoasCmp GreaterThanEqual (Var "result") (Var "x"))
 
 absoluteValueContract :: ValueAlgebra v => Contract v
 absoluteValueContract = ForallC (\x->HoareTriple PhoasT absoluteValue [x] (\result->PhoasAnd (PhoasCmp GreaterThanEqual result (lit 0)) (PhoasCmp GreaterThanEqual result x)))
 
 mySumFoasContract :: FirstOrderContract
-mySumFoasContract = MkContract ["in"] (FoasCmp GreaterThanEqual (Var "in") (Lit 0)) mySum ["in"] "result" (FoasCmp Equal (Mul (Lit 2) (Var "result")) (Mul (Var "in") (Add (Var "in") (Lit 1))))
+mySumFoasContract = MkContract ["in"] (FoasCmp GreaterThanEqual (Var "in") (Lit 0)) mySum [Var "in"] "result" (FoasCmp Equal (Mul (Lit 2) (Var "result")) (Mul (Var "in") (Add (Var "in") (Lit 1))))
 
 mySumContract :: ValueAlgebra v => Contract v
 mySumContract = ForallC (\inp -> HoareTriple (PhoasCmp GreaterThanEqual inp (lit 0)) mySum [inp] (\result  -> PhoasCmp Equal (mul (lit 2) result) (mul inp (add inp (lit 1)))))
   
 distributiveContract :: FirstOrderContract
-distributiveContract = MkContract ["a","b","c"] FoasT distributive ["a","b","c"] "result" (FoasCmp Equal (Add (Mul (Var "a") (Var "b")) (Mul (Var "a") (Var "c"))) (Var "result"))
+distributiveContract = MkContract ["a","b","c"] FoasT distributive [Var "a",Var "b",Var "c"] "result" (FoasCmp Equal (Add (Mul (Var "a") (Var "b")) (Mul (Var "a") (Var "c"))) (Var "result"))
 
 moduloContractSmaller :: FirstOrderContract
-moduloContractSmaller = MkContract ["a","b"] FoasT modulo ["a","b"] "result" (FoasCmp LessThan (Var "result") (Var "b"))
+moduloContractSmaller = MkContract ["a","b"] FoasT modulo [Var "a",Var "b"] "result" (FoasCmp LessThan (Var "result") (Var "b"))
 moduloContractSmallernormal :: FirstOrderContract
-moduloContractSmallernormal = MkContract ["b","a"] FoasT modulo ["a","b"] "result" (FoasCmp LessThan (Var "result") (Var "b"))
+moduloContractSmallernormal = MkContract ["b","a"] FoasT modulo [Var "a",Var "b"] "result" (FoasCmp LessThan (Var "result") (Var "b"))
 
 
+infiniteContract1 :: FirstOrderContract
+infiniteContract1 =MkContract ["x"] FoasT infiniteProg [Var "x"] "result" (FoasCmp Equal (Var "result") (Lit 1))
+
+infiniteContract2 :: FirstOrderContract
+infiniteContract2 =MkContract ["x"] FoasT infiniteProg [Var "x"] "result" FoasF
 
 
+ 
 
+-- examples
+add_5_to_1_with_var :: Stm
+add_5_to_1_with_var = Let "x" (Expr (Lit 5)) (Expr (Add (Var "x") (Lit 1)))
+
+testingScope :: Stm
+testingScope = Let "x" (Expr (Lit 5)) (Seq (Assign "x" (Expr (Lit 1))) (Expr (Var "x")))
+
+testingScope2 :: Stm
+testingScope2 = Seq (Let "x" (Expr (Lit 5)) (Expr (Lit 5))) (Expr (Lit 7))
+
+testingScope3 :: Stm
+testingScope3 = Let "y" (Expr (Lit 2)) (Let "x" (Expr (Lit 3)) (Seq (Let "y" (Expr (Lit 4)) (Assign "x" (Expr (Lit 2)))) (Expr (Add (Var "x") (Var "y")))))
+
+absoluteValueStm :: Stm
+absoluteValueStm = Let "x" (Expr (Lit (-5))) (If (Compare LessThan (Var "x") ( (Lit 0))) (Expr (Minus ( (Lit 0)) (Var "x"))) (Expr (Var "x")))
 
 

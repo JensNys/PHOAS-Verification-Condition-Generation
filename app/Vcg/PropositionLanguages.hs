@@ -132,11 +132,11 @@ instance ValueAlgebra (State Int Exp) where
 -- the motivation between FoasValue is that in the Hoas prop, you can say Exists (\v-> Cmp Equal v 5) so in first order a comparison could be between variables and FoasValues (Exist "v" (Cmp Equal (Var "v") (Val 5)))
 
 
-type ReaderInt v = Reader Int v
+type IntReader v = Reader Int v
 
 
 
-{- phoasValue_to_foasValueReader :: PhoasValue (ReaderInt Stm) -> ReaderInt FoasValue
+{- phoasValue_to_foasValueReader :: PhoasValue (IntReader Stm) -> IntReader FoasValue
 phoasValue_to_foasValueReader (PVal v) = return $ FVal v
 phoasValue_to_foasValueReader (PVar rfv) = rfv -}
 
@@ -152,10 +152,10 @@ example_db = PhoasForall  (\b -> PhoasAnd (PhoasForall  (\a -> PhoasCmp Equal a 
 -------------------
 
 
-phoas_to_foas :: PhoasProp (ReaderInt Exp) -> FoasProp
+phoas_to_foas :: PhoasProp (IntReader Exp) -> FoasProp
 phoas_to_foas phoasProp = runReader (phoas_to_foas_reader phoasProp) 0
 
-phoas_to_foas_reader :: PhoasProp (ReaderInt Exp) -> ReaderInt FoasProp
+phoas_to_foas_reader :: PhoasProp (IntReader Exp) -> IntReader FoasProp
 phoas_to_foas_reader PhoasT = return FoasT
 phoas_to_foas_reader PhoasF = return FoasF
 phoas_to_foas_reader (PhoasCmp op l r) = do v1 <- l
@@ -170,7 +170,7 @@ phoas_to_foas_reader (PhoasExist f)    = quantifiers_to_foas_reader f FoasExist
 phoas_to_foas_reader (PhoasForall f)   = quantifiers_to_foas_reader f FoasForall
 
 -- interprets a quantifier
-quantifiers_to_foas_reader :: ((ReaderInt Exp)->PhoasProp (ReaderInt Exp))->(LVar->FoasProp->FoasProp)->ReaderInt FoasProp
+quantifiers_to_foas_reader :: ((IntReader Exp)->PhoasProp (IntReader Exp))->(LVar->FoasProp->FoasProp)->IntReader FoasProp
 quantifiers_to_foas_reader f quantifier=do i <- ask
                                            let arg = "x" ++ show i 
                                            body <- (local (+1) $ phoas_to_foas_reader $ (f (return (Var arg))))
@@ -180,7 +180,7 @@ quantifiers_to_foas_reader f quantifier=do i <- ask
 
 
 --interprets a binary propositional operator.
-binary_prop_to_foas_reader :: (PhoasProp (ReaderInt Exp))->(PhoasProp (ReaderInt Exp))->(FoasProp->FoasProp->FoasProp)->ReaderInt FoasProp
+binary_prop_to_foas_reader :: (PhoasProp (IntReader Exp))->(PhoasProp (IntReader Exp))->(FoasProp->FoasProp->FoasProp)->IntReader FoasProp
 binary_prop_to_foas_reader p1 p2 bin = do r1 <- phoas_to_foas_reader p1
                                           r2 <- phoas_to_foas_reader p2
                                           return $ bin r1 r2
@@ -227,11 +227,59 @@ binary_prop_to_foas_state p1 p2 bin = do r1 <- phoas_to_foas_state p1
                                          r2 <- phoas_to_foas_state p2
                                          return $ bin r1 r2
 ---------------------------
+
+phoas_to_foas_state_exp :: PhoasProp (Exp) -> FoasProp
+phoas_to_foas_state_exp phoasProp = evalState (phoas_to_foas_state' phoasProp) 0
+
+
+
+
+phoas_to_foas_state' :: PhoasProp ( Exp) -> StateInt FoasProp
+phoas_to_foas_state' PhoasT = return FoasT
+phoas_to_foas_state' PhoasF = return FoasF
+phoas_to_foas_state' (PhoasCmp op l r) = return $ FoasCmp op l r
+phoas_to_foas_state' (PhoasNot p) = do r <- phoas_to_foas_state' p
+                                       return $ FoasNot r
+phoas_to_foas_state' (PhoasAnd p1 p2)    = binary_prop_to_foas_state' p1 p2 FoasAnd
+phoas_to_foas_state' (PhoasOr p1 p2)     = binary_prop_to_foas_state' p1 p2 FoasOr
+phoas_to_foas_state' (PhoasImplies p1 p2)= binary_prop_to_foas_state' p1 p2 FoasImplies
+phoas_to_foas_state' (PhoasExist f)    = quantifiers_to_foas_state' f FoasExist
+phoas_to_foas_state' (PhoasForall f)   = quantifiers_to_foas_state' f FoasForall
+
+
+
+
+-- interprets a quantifier
+quantifiers_to_foas_state' ::  (( Exp)->PhoasProp ( Exp))->(LVar->FoasProp->FoasProp)->StateInt FoasProp
+quantifiers_to_foas_state' f quantifier=do i <- get
+                                           let arg = "x" ++ show i 
+                                           modify (+1)
+                                           body <- (phoas_to_foas_state' $ (f (Var arg)))
+                                           return $ quantifier arg body
+                                            
+
+
+
+--interprets a binary propositional operator.
+binary_prop_to_foas_state' :: (PhoasProp ( Exp))->(PhoasProp ( Exp))->(FoasProp->FoasProp->FoasProp)->StateInt FoasProp
+binary_prop_to_foas_state' p1 p2 bin = do r1 <- phoas_to_foas_state' p1
+                                          r2 <- phoas_to_foas_state' p2
+                                          return $ bin r1 r2
+
+
+
+
+
+
+
+
+-----------------------------
 phoas_to_foas_unfolded :: PhoasProp (Exp) -> FoasProp
 phoas_to_foas_unfolded phoasProp = runReader (phoas_to_foas_reader' phoasProp) 0
 
+-----------------------------------
 
-phoas_to_foas_reader' :: PhoasProp (Exp) -> ReaderInt FoasProp
+phoas_to_foas_reader' :: PhoasProp (Exp) -> IntReader FoasProp
 phoas_to_foas_reader' PhoasT = return FoasT
 phoas_to_foas_reader' PhoasF = return FoasF
 phoas_to_foas_reader' (PhoasCmp op l r) = return $ FoasCmp op l r
@@ -243,13 +291,13 @@ phoas_to_foas_reader' (PhoasImplies p1 p2)= binary_prop_to_foas_reader' p1 p2 Fo
 phoas_to_foas_reader' (PhoasExist f)    = quantifiers_to_foas_reader' f FoasExist
 phoas_to_foas_reader' (PhoasForall f)   = quantifiers_to_foas_reader' f FoasForall
 
-binary_prop_to_foas_reader' :: (PhoasProp ( Exp))->(PhoasProp (Exp))->(FoasProp->FoasProp->FoasProp)->ReaderInt FoasProp
+binary_prop_to_foas_reader' :: (PhoasProp ( Exp))->(PhoasProp (Exp))->(FoasProp->FoasProp->FoasProp)->IntReader FoasProp
 binary_prop_to_foas_reader' p1 p2 bin = do r1 <- phoas_to_foas_reader' p1
                                            r2 <- phoas_to_foas_reader' p2
                                            return $ bin r1 r2
 
 
-quantifiers_to_foas_reader' ::  (Exp->PhoasProp ( Exp))->(LVar->FoasProp->FoasProp)->ReaderInt FoasProp
+quantifiers_to_foas_reader' ::  (Exp->PhoasProp ( Exp))->(LVar->FoasProp->FoasProp)->IntReader FoasProp
 quantifiers_to_foas_reader' f quantifier=do i <- ask
                                             let arg = "x" ++ show i
                                             --no suggestion provided, we pick arg as our fresh variable and increment i with 1.
@@ -276,10 +324,10 @@ data DBProp = DBT
 
 
 
-phoas_to_db :: PhoasProp (ReaderInt DBExp) -> DBProp
+phoas_to_db :: PhoasProp (IntReader DBExp) -> DBProp
 phoas_to_db phoasProp = runReader (phoas_to_db_reader phoasProp) 0
 
-phoas_to_db_reader :: PhoasProp (ReaderInt DBExp) -> ReaderInt DBProp
+phoas_to_db_reader :: PhoasProp (IntReader DBExp) -> IntReader DBProp
 phoas_to_db_reader PhoasT = return DBT
 phoas_to_db_reader PhoasF = return DBF
 phoas_to_db_reader (PhoasCmp op l r) = do v1 <- l
@@ -294,14 +342,14 @@ phoas_to_db_reader (PhoasExist f)    = quantifiers_to_db_reader f DBExist
 phoas_to_db_reader (PhoasForall f)   = quantifiers_to_db_reader f DBForall
 
 -- interprets a quantifier
-quantifiers_to_db_reader :: ((ReaderInt DBExp)->PhoasProp (ReaderInt DBExp))->(DBProp->DBProp)->ReaderInt DBProp
+quantifiers_to_db_reader :: ((IntReader DBExp)->PhoasProp (IntReader DBExp))->(DBProp->DBProp)->IntReader DBProp
 quantifiers_to_db_reader  f quantifier=do i <- ask
                                           body <- (local (+1) $ phoas_to_db_reader $ (f (reader (\j -> DBVar (j-(i+1))))))
                                           return $ quantifier body
 
 
 --interprets a binary propositional operator.
-binary_prop_to_db_reader :: (PhoasProp (ReaderInt DBExp))->(PhoasProp (ReaderInt DBExp))->(DBProp->DBProp->DBProp)->ReaderInt DBProp
+binary_prop_to_db_reader :: (PhoasProp (IntReader DBExp))->(PhoasProp (IntReader DBExp))->(DBProp->DBProp->DBProp)->IntReader DBProp
 binary_prop_to_db_reader p1 p2 bin = do r1 <- phoas_to_db_reader p1
                                         r2 <- phoas_to_db_reader p2
                                         return $ bin r1 r2
@@ -411,8 +459,8 @@ foas_to_phoas    | PhoasForall (Maybe String) (v->(PhoasProp v)) -}
 
 
 
--- the result variable should be named "Result"
-data FirstOrderContract = MkContract [LVar] (FoasProp) Prog [LVar] LVar FoasProp
+
+data FirstOrderContract = MkContract [LVar] (FoasProp) Prog [Exp] LVar FoasProp
   deriving (Eq,Show)
 --                universalQuantifications precondition Program Parameters ResultName storeNames Postcondition
 
@@ -427,7 +475,7 @@ foas_to_phoas_contract contract = foas_to_phoas_contract_env contract empty
 foas_to_phoas_contract_env :: ValueAlgebra v => FirstOrderContract ->M.Map LVar v -> Contract v
 foas_to_phoas_contract_env (MkContract (x:xs) precondition program variables result postcondition) env = ForallC (\a -> foas_to_phoas_contract_env (MkContract xs precondition program variables result postcondition) (insert x a env))
 foas_to_phoas_contract_env (MkContract [] precondition program variables result postcondition) env =
-   HoareTriple (foas_to_phoas' precondition env) program (fmap (env !) variables) (\r-> foas_to_phoas' postcondition (insert result r env))
+   HoareTriple (foas_to_phoas' precondition env) program (Prelude.map (`expression_to_algebra` env) (variables)) (\r-> foas_to_phoas' postcondition (insert result r env))
 
 
 

@@ -14,27 +14,6 @@ import qualified Data.Maybe
 import qualified Data.Map as Map
 
 
-newtype Wpure v a = Wpure {runWpure :: (a->PhoasProp v)->PhoasProp v}
-instance Functor (Wpure v) where
-  fmap = liftM
-
-instance Applicative (Wpure v) where
-  pure a = Wpure $ (\post->post a)
-  (<*>) = ap
-
-instance Monad (Wpure v) where
-    return = pure
-    c >>= k = Wpure $ (\post-> (runWpure c) (\a->runWpure (k a) post))
-
-
-
-
-
-
-
-
-
-
 
 newtype Wstore v a = Wstore {runWstore :: (a->(Store v)->PhoasProp v)->(Store v)->PhoasProp v}
 instance Functor (Wstore v) where
@@ -49,46 +28,39 @@ instance Monad (Wstore v) where
     c >>= k = Wstore $ (\post store1-> (runWstore c) (\a store2->runWstore (k a) post store2) store1)
 
 
+
+
+
 block :: ValueAlgebra v =>Wstore v a
 block = Wstore $ (\_ _->PhoasT)
 
 fail :: ValueAlgebra v =>Wstore v a
 fail = Wstore $ (\_ _->PhoasF)
 
--- unicode 2295
+
 (⊕) ::ValueAlgebra v => Wstore v a->Wstore v a -> Wstore v a
 m1 ⊕ m2 = Wstore $ (\post store-> PhoasOr ((runWstore m1) post store) ((runWstore m2) post store))
 
 (⊗) :: ValueAlgebra v =>Wstore v a->Wstore v a -> Wstore v a
 m1 ⊗ m2 = Wstore $ (\post store -> PhoasAnd ((runWstore m1) post store) ((runWstore m2) post store))
 
-
+-- The given proposition must hold together with our postcondition.
 assert :: ValueAlgebra v =>PhoasProp v -> Wstore v ()
 assert p = Wstore $ (\post store-> PhoasAnd p (post () store))
 
+-- If this proposition holds, the postcondition should hold.
 assume :: ValueAlgebra v =>PhoasProp v -> Wstore v ()
 assume p = Wstore $ (\post store-> PhoasImplies p (post () store))
 
-
+-- A value is given such that our postcondition holds for it.
 angelic :: ValueAlgebra v => Wstore v v
 angelic = Wstore $ (\post store-> PhoasExist (\v->post v store))
 
+--
 demonic :: ValueAlgebra v =>Wstore v v
 demonic = Wstore $ (\post store-> PhoasForall (\v->post v store))
 
 
-evalStore ::ValueAlgebra v => Wstore v a ->(Store v)-> Wpure v a
-evalStore m store = Wpure $ (\post-> (runWstore m) (\a _->post a) store)
-
-
-
-
-
-insertStore ::ValueAlgebra v => X->v -> Wstore v ()
-insertStore x v = Wstore $ (\post store->post () (insert x v store))
-
-deleteStore ::ValueAlgebra v => X-> Wstore v ()
-deleteStore x = Wstore $ (\post store-> post () (delete x store))
 
 
 
@@ -99,6 +71,12 @@ lookupWstore_fail k = Wstore $ (\post store->case (Data.Map.lookup k store) of
 
 lookupWstore_safe ::ValueAlgebra v => X->Wstore v (Maybe v)
 lookupWstore_safe k = Wstore $ (\post store-> post (Data.Map.lookup k store) store)
+
+insertStore ::ValueAlgebra v => X->v -> Wstore v ()
+insertStore x v = Wstore $ (\post store->post () (insert x v store))
+
+deleteStore ::ValueAlgebra v => X-> Wstore v ()
+deleteStore x = Wstore $ (\post store-> post () (delete x store))
 
 restoreWstore ::ValueAlgebra v => X-> Maybe v ->Wstore v ()
 restoreWstore var Nothing = deleteStore var
@@ -151,17 +129,8 @@ exec_list l c = exec_list' l [] c
 exec_list' :: ValueAlgebra v=> [Stm]->[v]->Contract v->Wstore v [v]
 exec_list' (stm:rest) acc c = do v <- (exec stm c)
                                  exec_list' rest (acc ++ [v]) c
-exec_list' [] acc c = return acc
+exec_list' [] acc _ = return acc
 
-
-angelicList' :: ValueAlgebra v =>  [LVar] ->[( LVar, v)]-> Contract v->Wstore v [( LVar, v)]
-angelicList' (lvar:rest) acc c = do v <- angelic
-                                    angelicList' rest ((lvar,v):acc) c
-angelicList' [] acc c = return acc
-
-angelicList ::ValueAlgebra v =>  [LVar] ->Contract v-> Wstore v (Map LVar v)
-angelicList l c = do list <- angelicList' l [] c
-                     return (fromList list)
 
 
 interpret_with ::ValueAlgebra v =>  (Map LVar v) -> [LVar] -> [v]
@@ -170,18 +139,18 @@ interpret_with m lvars = Data.Maybe.mapMaybe (\lvar -> Map.lookup lvar m) lvars
 
 
 exec :: ValueAlgebra v=> Stm->Contract v->Wstore v v
-exec (Expr expr) c= exec_exp expr
-exec (Assign var s) c = do v <- exec_exp s
-                           insertStore var v
+exec (Expr expr) _= exec_exp expr
+exec (Assign var s) c = do v <- exec s c -- evaluate the value that will be given to the variable
+                           insertStore var v -- bind this value to the variable name
                            return v
-exec (Let var s1 s2) c = do x <- exec s1 c -- p -- 
-                            previous <- lookupWstore_safe var
-                            insertStore var x
-                            result <- exec s2 c
-                            restoreWstore var previous
-                            return result
-exec (Seq s1 s2) c = do _ <- exec s1 c
-                        exec s2 c
+exec (Let var s1 s2) c = do x <- exec s1 c -- evaluate the value that will be given to the variable
+                            previous <- lookupWstore_safe var -- save the previous binding to this variable name
+                            insertStore var x -- bind the new value to the variable name
+                            result <- exec s2 c -- evaluate the body of let under this new store
+                            restoreWstore var previous -- restore the state to what it was before this binding
+                            return result -- return the result
+exec (Seq s1 s2) c = do _ <- exec s1 c -- evaluate the first statement
+                        exec s2 c -- evaluate the second statement
 exec (If bexp s1 s2) c = do b <- execb bexp
                             matchBool_demonic b (exec s1 c) (exec s2 c)
 exec (Recurse stmList) c = 
@@ -198,59 +167,19 @@ allEqual l1 l2 = Prelude.foldr PhoasAnd PhoasT (zipWith (PhoasCmp Equal) l1 l2)
 
 exec_recursion ::ValueAlgebra v=> Stm->Contract v->Contract v -> Wstore v v
 exec_recursion (Recurse stmList) (ForallC f) c =
-          do v <- angelic
+          do v <- angelic --angelically chose a variable to instantiate with
              exec_recursion (Recurse stmList) (f v) c
-exec_recursion (Recurse stmList) (HoareTriple pre (Fun funName varnames stm) inputs post) c =
-          do value_list <- exec_list stmList c
-             assert (allEqual inputs value_list)
-             assert pre
-             v_result <- demonic
-             assume (post v_result)
+exec_recursion (Recurse stmList) (HoareTriple pre _ inputs post) c =
+          do value_list <- exec_list stmList c -- evaluate the arguments we will call the program with
+             assert (allEqual inputs value_list) -- assert that these values are equal to the values in the contract
+             assert pre --assert that the precondition holds
+             v_result <- demonic -- get a result
+             assume (post v_result) -- We assume that the postcondition holds for the result
              return v_result
 
-exec_recursion stm c1 c2  = do block -- this function should only be called when there is recursion
+exec_recursion _ _ _  = do Vcg.ConstraintGeneration.fail -- this function should only be called when there is recursion
 
 
-
-
-
-
-  {- 
-                       do values <- execList compile stmList
-                          assert pre
-                          bindings <- savebindings
-                          removeBindings
-                          addBindings
-
-                          result <- exec body (contract)
-                          assume (post result) -}
-
-
-
-
-
-
-
-
-{- 
-mySumContract :: ValueAlgebra v => Contract v
-mySumContract = ForallC (\inp -> HoareTriple (PhoasCmp GreaterThanEqual inp (lit 0)) mySum [inp] (\result  -> PhoasCmp Equal (mul (lit 2) result) (mul inp (minus inp (lit 1)))))
- -}
-
-
--- with normal state: θ St(m) = λpost s0. post (m s0)
--- total correctness interpretation by doing F
-{- observationTotal :: ValueAlgebra v => StateT (Store v) Maybe a->Wstore v a 
-observationTotal r = Wstore $ (\post s0-> case ((runStateT r) s0) of 
-                                          Nothing -> PhoasF
-                                          Just (a,store) -> post a store)
-
--- with normal state: θ St(m) = λpost s0. post (m s0)
--- partial correctness interpretation by doing T
-observationPartial :: ValueAlgebra v => StateT (Store v) Maybe a->Wstore v a 
-observationPartial r = Wstore $ (\post s0-> case ((runStateT r) s0) of 
-                                          Nothing -> PhoasT
-                                          Just (a,store) -> post a store) -}
 
 
 

@@ -9,12 +9,13 @@ import Vcg.ExampleContracts
 import Data.Map
 import System.Process (readProcessWithExitCode)
 import System.Exit (ExitCode(..))
+import Vcg.ExampleContracts (infiniteContract1)
 
 runTests :: IO ()
 runTests = runTestTT tests >> return ()
 
 tests :: Test
-tests = TestList [test1,test2,test3,test4,test5,test6,test7,test8,test9,test10,test11,test12]
+tests = TestList [test1,test2,test3,test4,test5,test6,test7,test8,test9,test10,test11,test12,test13,test14,test15]
 -- run 1 test with runTestTT test1
 -- run all tests by runTestTT tests
 
@@ -27,6 +28,8 @@ propVerifier name prop =
                     makeCoqFile name prop
                     (exitCode, _, stderr) <- readProcessWithExitCode "coqc" [name ++ ".v"] ""
                     assertEqual ("Coq verification failed:\n" ++ stderr) ExitSuccess exitCode
+
+
 
 
 contractVerifier :: String -> FirstOrderContract-> Test
@@ -67,8 +70,14 @@ test11 = contractVerifier "test_file"  moduloContractSmaller
 test12 :: Test 
 test12 = contractVerifier "test_file"  moduloContractSmallernormal
 
+test13 :: Test
+test13 = contractVerifier "test_file" maxAdditionContract
 
 
+test14 :: Test
+test14 = contractVerifier "test_file" infiniteContract1
+test15 :: Test
+test15 = contractVerifier "test_file" infiniteContract2
  
 
 
