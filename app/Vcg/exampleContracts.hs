@@ -116,7 +116,6 @@ moduloContractSmallernormal = MkContract ["b","a"] FoasT modulo [Var "a",Var "b"
 infiniteContract1 :: FirstOrderContract
 infiniteContract1 =MkContract ["x"] FoasT infiniteProg [Var "x"] "result" (FoasCmp Equal (Var "result") (Lit 1))
 
-infiniteContract2 :: FirstOrderContract
 infiniteContract2 =MkContract ["x"] FoasT infiniteProg [Var "x"] "result" FoasF
 
 

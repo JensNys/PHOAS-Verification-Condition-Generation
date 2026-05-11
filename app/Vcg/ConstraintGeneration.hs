@@ -208,8 +208,8 @@ vcFoas_reader_exp = phoas_to_foas_unfolded . vc . foas_to_phoas_contract
 vcFoas_state_state :: FirstOrderContract -> FoasProp
 vcFoas_state_state = phoas_to_foas_global . vc . foas_to_phoas_contract 
 
---vcFoas_state_exp :: FirstOrderContract -> FoasProp
---vcFoas_state_exp  = phoas_to_foas $ vc (foas_to_phoas_contract fc) fc
+vcFoas_state_exp :: FirstOrderContract -> FoasProp
+vcFoas_state_exp  = phoas_to_foas_state_exp . vc . foas_to_phoas_contract 
 
 
 vcFoas_db :: FirstOrderContract -> DBProp

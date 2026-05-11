@@ -8,7 +8,7 @@ import Vcg.Test
 import Vcg.Benchmark (runBenchmark)
 
 main :: IO ()
-main = runTests
+main = runBenchmark--runTests
 --main =  makeCoqFile "absoluteValueContractFirstOrderInput" $ vcFoas_reader_exp firstOrderAbsContract
 
 
