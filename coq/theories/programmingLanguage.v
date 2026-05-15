@@ -855,6 +855,38 @@ Qed.
      match foas_contract with
       | Foas.MkContract forallVar pre prog  arg result post => ForallC (fun v => HoareTriple (foas_to_phoas VA {[ forallVar := v ]} pre) prog v (fun r => foas_to_phoas VA ({[ forallVar := v ]} ∪ {[ result := r ]} ) post))
      end .
+Lemma lookup_union_case
+  (V : Set)
+  (v result_v : V)
+  (env : stringmap V)
+  (forallVar result : string) :
+  forall s v',  result <> forallVar ->
+    (env = ({[forallVar := v]}
+   ∪ {[result := result_v]})) /\ env  !! s = Some v' ->
+    (s = forallVar -> v' = v) /\
+    (s = result -> v' = result_v) /\
+    (s <> forallVar /\ s <> result -> False).
+    Proof.
+
+intros. split.
+   * destruct H0 as [Henv Hlookup].
+subst env. intros. rewrite H0 in *. 
+
+subst s.
+rewrite lookup_union_Some in Hlookup. 
+**
+  destruct Hlookup as [H1 | H2]. 
+      ***
+        rewrite lookup_singleton_Some in *. eauto.
+        destruct H1. 
+        rewrite H1. reflexivity.
+      *** 
+        rewrite lookup_singleton_Some in *. 
+        destruct H2. contradiction.
+** apply map_disjoint_singleton_l_2 .
+rewrite lookup_singleton_ne; done.
+* 
+ Admitted. 
 
 
      Theorem wf_foas_to_phoas_contract (World : Type) (V : Set) (acc : relation World)
@@ -899,15 +931,20 @@ Proof.
     exact Hwfpost.
     + 
       intros s v' Hlookup.
-      rewrite lookup_union_Some  in Hlookup.
 
-* admit.
+destruct (String.eq_dec s forallVar) as [Hs | Hs].
+-- subst s.
+rewrite lookup_union_Some in Hlookup. **
+
+  admit. 
+  **
 
 
-
-
-* apply map_disjoint_singleton_l_2.
+ apply map_disjoint_singleton_l_2.
 rewrite lookup_singleton_ne; done. 
+
+--
+
 Admitted.
   
 
@@ -1982,7 +2019,7 @@ Lemma wfEnd_to_end (c : Foas.Contract) : Foas.wfContract c -> Foas.wfprop empty 
       * apply set_subseteq_preorder. 
       * apply Phoas.wfe.
       * apply Phoas.weakening_wfe.
-    * eapply Phoas.wf_foas_to_phoas_contract. (*foas to phoas*)
+    * eapply Phoas.wf_foas_to_phoas_contract. (*foas to phoas contract*)
         + apply Phoas.like_wfexp_exp.
         + apply Phoas.weakening_wfe.
         + constructor; eauto.
