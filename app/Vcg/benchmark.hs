@@ -68,6 +68,15 @@ benchmark_stm_far :: Int->Int -> Stm
 benchmark_stm_far 0 i= Recurse (map (\i -> Expr (Var ("l" ++ show i))) [1..i])
 benchmark_stm_far n i= Let ("l" ++ show n) (Expr (Var ("i" ++ show n))) (benchmark_stm_far (n-1) i)
 
+just_recursion_stm :: Int->Stm
+just_recursion_stm i= Recurse (map (\i -> Expr (Var ("l" ++ show i))) [1..i])
+
+
+benchmark_stm_if :: Int -> Stm
+benchmark_stm_if 0= Expr $ Lit 0
+benchmark_stm_if n= Seq (If (Cmp Equal (Lit 0) (Var ("l" ++ show i)))) (benchmark_stm_if (n-1))
+
+
 
 
 benchmark_program :: Int -> Prog
@@ -76,6 +85,8 @@ benchmark_program n =Fun "f" (map (\i -> "i" ++ show i) [1 .. n]) (benchmark_stm
 benchmark_program_far :: Int -> Prog
 benchmark_program_far n = Fun "f" (map (\i -> "i" ++ show i) [1 .. n]) (benchmark_stm_far n n)
 
+just_recursion_prog :: Int->Prog
+just_recursion_prog n =  Fun "f" (map (\i -> "i" ++ show i) [1 .. n]) (just_recursion_stm n)
 
 
 benchmark_phoas_contract :: Int -> Contract v
@@ -115,6 +126,18 @@ benchmark_foas_contract n = MkContract (map (\i -> "i" ++ show i) [1 .. n]) (ben
 
 benchmark_foas_contract_far :: Int ->  FirstOrderContract
 benchmark_foas_contract_far n = MkContract (map (\i -> "i" ++ show i) [1 .. n]) (benchmark_foas_prop_far n) (benchmark_program_far n) (map (\i -> Var ("i" ++ show i)) [1 .. n]) "result" (benchmark_foas_prop_far n) 
+
+benchmark_foas_contract_just_recursion :: Int ->  FirstOrderContract
+benchmark_foas_contract_just_recursion n = MkContract (map (\i -> "i" ++ show i) [1 .. n]) (benchmark_foas_prop_far n) (just_recursion_prog n) (map (\i -> Var ("i" ++ show i)) [1 .. n]) "result" (benchmark_foas_prop_far n) 
+
+benchmark_foas_contract_just_recursion_no_pre :: Int ->  FirstOrderContract
+benchmark_foas_contract_just_recursion_no_pre n = MkContract (map (\i -> "i" ++ show i) [1 .. n]) (FoasT) (just_recursion_prog n) (map (\i -> Var ("i" ++ show i)) [1 .. n]) "result" (benchmark_foas_prop_far n) 
+
+benchmark_foas_contract_just_recursion_no_post :: Int ->  FirstOrderContract
+benchmark_foas_contract_just_recursion_no_post n = MkContract (map (\i -> "i" ++ show i) [1 .. n]) (benchmark_foas_prop_far n) (just_recursion_prog n) (map (\i -> Var ("i" ++ show i)) [1 .. n]) "result" (FoasT) 
+
+benchmark_foas_contract_just_recursion_no_pre_post :: Int ->  FirstOrderContract
+benchmark_foas_contract_just_recursion_no_pre_post n = MkContract (map (\i -> "i" ++ show i) [1 .. n]) (FoasT) (just_recursion_prog n) (map (\i -> Var ("i" ++ show i)) [1 .. n]) "result" (FoasT) 
 
 
 
@@ -198,8 +221,8 @@ benchmark_db_close  = sizeDBProp . vcFoas_db . benchmark_foas_contract
 benchmark_reader_reader_far :: Int -> Int
 benchmark_reader_reader_far  = sizeFoasProp . vcFoas_reader_reader . benchmark_foas_contract_far
 
-benchmark_reader_exp_far :: Int -> FoasProp
-benchmark_reader_exp_far  = vcFoas_reader_exp . benchmark_foas_contract_far
+benchmark_reader_exp_far :: Int -> Int
+benchmark_reader_exp_far  = sizeFoasProp . vcFoas_reader_exp . benchmark_foas_contract_far
 
 benchmark_state_state_far :: Int -> Int
 benchmark_state_state_far  = sizeFoasProp . vcFoas_state_state . benchmark_foas_contract_far
@@ -211,38 +234,30 @@ benchmark_state_exp_far  = sizeFoasProp . vcFoas_state_exp . benchmark_foas_cont
 benchmark_db_far :: Int -> Int
 benchmark_db_far  = sizeDBProp . vcFoas_db . benchmark_foas_contract_far
 
+----------------------
+benchmark_just_recursion :: Int->Int
+benchmark_just_recursion = sizeDBProp . vcFoas_db . benchmark_foas_contract_just_recursion
+
+benchmark_just_recursion_no_pre :: Int->Int
+benchmark_just_recursion_no_pre = sizeDBProp . vcFoas_db . benchmark_foas_contract_just_recursion_no_pre
+
+
+benchmark_just_recursion_no_post :: Int->Int
+benchmark_just_recursion_no_post = sizeDBProp . vcFoas_db . benchmark_foas_contract_just_recursion_no_post
+
+benchmark_just_recursion_no_pre_post :: Int->Int
+benchmark_just_recursion_no_pre_post = sizeDBProp . vcFoas_db . benchmark_foas_contract_just_recursion_no_pre_post
 
 
 
 
 runBenchmark :: IO ()
-runBenchmark = defaultMainWith (defaultConfig { csvFile = Just "results.csv" })
-  [ bgroup "f2p2f_close"
-      [ bgroup "reader_reader" [ bench (show n) $ whnf f2p2f_close_reader_reader n | n <- benchmark_values 10 ]
-      , bgroup "reader_exp"    [ bench (show n) $ whnf f2p2f_close_reader_exp n    | n <- benchmark_values 10 ]
-      , bgroup "state_state"   [ bench (show n) $ whnf f2p2f_close_state_state n   | n <- benchmark_values 10 ]
-      , bgroup "state_exp"     [ bench (show n) $ whnf f2p2f_close_state_exp n     | n <- benchmark_values 10 ]
-      , bgroup "db"            [ bench (show n) $ whnf f2p2f_close_db n            | n <- benchmark_values 10 ]
-      ]
-  , bgroup "f2p2f_far"
-      [ bgroup "reader_reader" [ bench (show n) $ whnf f2p2f_far_reader_reader n | n <- benchmark_values 10 ]
-      , bgroup "reader_exp"    [ bench (show n) $ whnf f2p2f_far_reader_exp n    | n <- benchmark_values 10 ]
-      , bgroup "state_state"   [ bench (show n) $ whnf f2p2f_far_state_state n   | n <- benchmark_values 10 ]
-      , bgroup "state_exp"     [ bench (show n) $ whnf f2p2f_far_state_exp n     | n <- benchmark_values 10 ]
-      , bgroup "db"            [ bench (show n) $ whnf f2p2f_far_db n            | n <- benchmark_values 10 ]
-      ]
-  , bgroup "vcgen_close"
-      [ bgroup "reader_reader" [ bench (show n) $ whnf benchmark_reader_reader_close n | n <- benchmark_values 10 ]
-      , bgroup "reader_exp"    [ bench (show n) $ whnf benchmark_reader_exp_close n    | n <- benchmark_values 10 ]
-      , bgroup "state_state"   [ bench (show n) $ whnf benchmark_state_state_close n   | n <- benchmark_values 10 ]
-      , bgroup "state_exp"     [ bench (show n) $ whnf benchmark_state_exp_close n     | n <- benchmark_values 10 ]
-      , bgroup "db"            [ bench (show n) $ whnf benchmark_db_close n            | n <- benchmark_values 10 ]
-      ]
-  , bgroup "vcgen_far"
-      [ bgroup "reader_reader" [ bench (show n) $ whnf benchmark_reader_reader_far n | n <- benchmark_values 8 ]
-      , bgroup "reader_exp"    [ bench (show n) $ whnf benchmark_reader_exp_far n    | n <- benchmark_values 8 ]
-      , bgroup "state_state"   [ bench (show n) $ whnf benchmark_state_state_far n   | n <- benchmark_values 8 ]
-      , bgroup "state_exp"     [ bench (show n) $ whnf benchmark_state_exp_far n     | n <- benchmark_values 8 ]
-      , bgroup "db"            [ bench (show n) $ whnf benchmark_db_far n            | n <- benchmark_values 8 ]
+runBenchmark = defaultMainWith (defaultConfig { csvFile = Just "just_recursion.csv" }) $
+  [ bgroup "just recursion"
+      [ bgroup "db"                  [ bench (show n) $ whnf benchmark_just_recursion           n | n <- benchmark_values 7 ]
+      , bgroup "db no pre"           [ bench (show n) $ whnf benchmark_just_recursion_no_pre    n | n <- benchmark_values 7 ]
+      , bgroup "db no post"          [ bench (show n) $ whnf benchmark_just_recursion_no_post   n | n <- benchmark_values 7 ]
+      , bgroup "db no pre post"      [ bench (show n) $ whnf benchmark_just_recursion_no_pre_post n | n <- benchmark_values 7 ]
       ]
   ]
+  

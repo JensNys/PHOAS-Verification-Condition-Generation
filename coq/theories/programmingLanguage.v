@@ -187,8 +187,6 @@ Inductive Exp : Set :=
 | Lit (n : Z)
 | Var (x : string)
 | Add (e1 e2 : Exp).
-  
-  
 Inductive Stm : Set :=
   | Expr (e : Exp)
   | Let (var:string) (e : Exp) (body:Stm).
@@ -246,6 +244,16 @@ Inductive wfexp (Γ : stringset) : Exp -> Type :=
   wfexp Γ e2 ->
   wfexp Γ (Add e1 e2).
 
+
+
+Inductive wfStm (Γ : stringset)  : Stm -> Type :=
+  | WfExpr (e : Exp) :  wfexp Γ e -> wfStm Γ (Expr e)
+  | WfLet (var:string) (e : Exp) (body:Stm) : wfexp Γ e -> wfStm (union Γ (singleton var)) body-> wfStm Γ (Let var e body) .
+
+
+Inductive wfProg : Prog -> Type :=
+  | WfFun name param body: wfStm  (singleton param) body -> wfProg (Fun name param  body ).
+  
 
 
   
@@ -365,14 +373,10 @@ Module Foas.
   Inductive wfprop (Γ : stringset) : prop -> Type :=
     | WfT : wfprop Γ T
     | WfF: wfprop Γ F
-    
     | WfImplies l r : wfprop Γ l->wfprop Γ r->wfprop Γ (Implies l r)
     | WfAnd l r : wfprop Γ l->wfprop Γ r->wfprop Γ (And l r)
     | WfOr l r : wfprop Γ l->wfprop Γ r->wfprop Γ (Or l r)
-    | WfCmp c l r :
-      PL.wfexp Γ l ->
-      PL.wfexp Γ r ->
-      wfprop Γ (Cmp c l r)
+    | WfCmp c l r :PL.wfexp Γ l -> PL.wfexp Γ r -> wfprop Γ (Cmp c l r)
     | WfForall (x : string) (body : prop) :
     wfprop (union Γ (singleton x)) body ->
     wfprop Γ (Foas.Forall x body).
@@ -390,7 +394,16 @@ Module Foas.
   Inductive Contract := 
      | MkContract (forallVar : string) (pre : prop) (prog : PL.Prog) (arg : string) (result: string) (post : prop).
 
-    
+  Inductive wfContract : Contract -> Prop :=
+    |WfContract (forallVar : string) (pre : prop) (prog : PL.Prog) (arg : string) (result: string) (post : prop) :
+     Foas.wfprop (singleton forallVar) pre ->
+      PL.wfProg prog -> (forallVar = arg) ->
+       Foas.wfprop (union (singleton result) (singleton forallVar)) post ->
+        wfContract (MkContract forallVar pre prog arg result post) .
+
+
+
+
   (*
 
   *)
@@ -613,7 +626,7 @@ Inductive prop (A : Set) : Set :=
     |Foas.And H1 H2=> And (foas_to_phoas VA store H1) (foas_to_phoas VA store H2)
     |Foas.Or H1 H2=> Or (foas_to_phoas VA store H1) (foas_to_phoas VA store H2)
     |@Foas.Forall x body  => 
-  Forall (fun arg => @foas_to_phoas V VA (insert x arg store) body)
+        Forall (fun arg => @foas_to_phoas V VA (insert x arg store) body)
     |Foas.Cmp cmp l r => Cmp cmp (PL.interp_to_va_default VA store l) (PL.interp_to_va_default VA store r)
     end. 
      
@@ -1864,10 +1877,18 @@ Qed.
 End Preds.
   End constraintGeneration.
 
-Section well_scoped_generation.
+Section well_formed_generation.
 Check Phoas.wfprop.
 Check Phoas.R.
 
+
+Lemma wfEnd_to_end (c : Foas.Contract) : Foas.wfContract c -> Foas.wfprop empty (constraintGeneration.vc_foas c).
+  intros.
+  destruct c.
+  inversion H.
+  unfold Foas.wfContract in H.
+  constructor in H.
+  unfold H.
 
 
 
