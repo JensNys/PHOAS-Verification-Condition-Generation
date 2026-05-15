@@ -246,12 +246,12 @@ Inductive wfexp (Γ : stringset) : Exp -> Type :=
 
 
 
-Inductive wfStm (Γ : stringset)  : Stm -> Type :=
+Inductive wfStm (Γ : stringset)  : Stm -> Prop :=
   | WfExpr (e : Exp) :  wfexp Γ e -> wfStm Γ (Expr e)
   | WfLet (var:string) (e : Exp) (body:Stm) : wfexp Γ e -> wfStm (union Γ (singleton var)) body-> wfStm Γ (Let var e body) .
 
 
-Inductive wfProg : Prog -> Type :=
+Inductive wfProg : Prog -> Prop :=
   | WfFun name param body: wfStm  (singleton param) body -> wfProg (Fun name param  body ).
   
 
@@ -394,13 +394,17 @@ Module Foas.
   Inductive Contract := 
      | MkContract (forallVar : string) (pre : prop) (prog : PL.Prog) (arg : string) (result: string) (post : prop).
 
-  Inductive wfContract : Contract -> Prop :=
-    |WfContract (forallVar : string) (pre : prop) (prog : PL.Prog) (arg : string) (result: string) (post : prop) :
-     Foas.wfprop (singleton forallVar) pre ->
-      PL.wfProg prog -> (forallVar = arg) ->
-       Foas.wfprop (union (singleton result) (singleton forallVar)) post ->
-        wfContract (MkContract forallVar pre prog arg result post) .
-
+  
+Check Foas.wfprop. 
+  Definition wfContract (c : Contract) : Type :=
+  match c with
+  | MkContract forallVar pre prog arg result post =>
+      (Foas.wfprop (singleton forallVar) pre )*
+      (PL.wfProg prog) *
+      (forallVar = arg) *
+      (forallVar <> result) *
+     ( Foas.wfprop (union (singleton forallVar) (singleton result)) post)
+  end.
 
 
 
@@ -581,8 +585,19 @@ Inductive prop (A : Set) : Set :=
   Inductive Contract (V:Set) := 
      | ForallC (f: V -> Contract V)
      | HoareTriple (pre : prop V) (program : PL.Prog) (arg:V) (post :V -> prop V).
-     
-     
+  
+  Inductive wfContract (World : Type) (V:Set) {acc : relation World} (wfV : Pred World V) (w:World) :  Contract V -> Prop :=
+  | WfForallC {f : V -> Contract V} :
+        (forall (v : V) w', acc w w' -> wfV w' v -> wfContract  wfV w' (f v)) ->
+        wfContract  wfV w (ForallC f)
+  | WfHoareTriple (pre : prop V) (program : PL.Prog) (arg:V) (post :V -> prop V):
+        wfprop acc wfV w pre ->
+        PL.wfProg program ->
+        wfV w arg ->
+        (forall (result : V) w', acc w w' -> wfV w' result ->
+          wfprop acc wfV w' (post result)) -> 
+          wfContract wfV w (HoareTriple pre program arg post)
+          .
      
    
      
@@ -764,7 +779,6 @@ Qed.
 
 
 
-     Check Phoas.wfprop.
     
     
     
@@ -814,7 +828,7 @@ Qed.
 
 
   
-  Lemma wfphoas_to_foas (World : Type) (Γ : stringset) (p : Phoas.prop (PL.Exp)) (wfp : @Phoas.wfprop stringset subseteq ( PL.Exp) wfe  Γ p) :
+  Lemma wfphoas_to_foas (World : Type) (Γ : stringset) (p : Phoas.prop (PL.Exp)) (wfp : @Phoas.wfprop stringset subseteq ( PL.Exp) wfe Γ p) :
     Foas.wfprop Γ (phoas_to_foas Γ p).
   Proof.
     induction wfp; cbn.
@@ -834,14 +848,68 @@ Qed.
 
     (*if I make a decision procedure with Ltac that decides whether a Foas formula is well formed, can I use it to*)
 
-  Fixpoint foas_to_phoas_admitted (V:Set) (env : stringmap V) (foasprop : Foas.prop) : prop V. Admitted.
+  
 
-
-
-  Definition foas_contract_to_phoas_contract (V : Set) (env : stringmap V) (foas_contract : Foas.Contract) : Contract V :=
+  Check foas_to_phoas.
+  Definition foas_contract_to_phoas_contract (V : Set) (VA : PL.ValueAlgebra V) (env : stringmap V) (foas_contract : Foas.Contract) : Contract V :=
      match foas_contract with
-      | Foas.MkContract forallVar pre prog  arg result post => ForallC (fun v => HoareTriple (foas_to_phoas_admitted {[ forallVar := v ]} pre) prog v (fun r => foas_to_phoas_admitted ({[ forallVar := v ]} ∪ {[ result := r ]} ) post))
+      | Foas.MkContract forallVar pre prog  arg result post => ForallC (fun v => HoareTriple (foas_to_phoas VA {[ forallVar := v ]} pre) prog v (fun r => foas_to_phoas VA ({[ forallVar := v ]} ∪ {[ result := r ]} ) post))
      end .
+
+
+     Theorem wf_foas_to_phoas_contract (World : Type) (V : Set) (acc : relation World)
+    (VA: PL.ValueAlgebra V)
+     (wfV : Pred World V)
+    (w : World)
+    (env : stringmap V)
+    (c : Foas.Contract) 
+    (wfE' : Like_wfexp VA wfV)
+    (weaken : Weakening acc wfV)
+    :
+    Foas.wfContract c ->
+    @wfContract World V acc wfV w
+      (foas_contract_to_phoas_contract VA env c).
+Proof.
+  intros Hwf.
+  destruct c as [forallVar pre prog arg result post].
+  (* unfold the FOAS well-formedness *)
+  destruct Hwf as [[[[Hwfpre Hwfprog] Harg] Hresultname] Hwfpost].
+  (* the translation wraps in ForallC *)
+  simpl. apply WfForallC.
+  intros v w' Hacc Hwfv.
+  (* now prove WfHoareTriple *)
+  apply WfHoareTriple.
+  - (* pre well-formed: use foas_to_phoas_wfprop *)
+    eapply Phoas.wf_foas_to_phoas  ;eauto.
+    + rewrite dom_singleton_L. exact Hwfpre.
+    + rewrite Harg.
+     
+     intros s v' Hlookup.
+      rewrite lookup_singleton_Some in Hlookup.
+      destruct Hlookup as [_ ->].
+      exact Hwfv.
+  - (* program well-formed: direct from hypothesis *)
+    exact Hwfprog.
+  - 
+    exact Hwfv.
+  - (* post well-formed: similar to pre, larger domain *)
+    intros result_v w'' Hacc' Hwfresult.
+    eapply Phoas.wf_foas_to_phoas  ;eauto.
+    + rewrite dom_union_L, !dom_singleton_L.
+    exact Hwfpost.
+    + 
+      intros s v' Hlookup.
+      rewrite lookup_union_Some  in Hlookup.
+
+* admit.
+
+
+
+
+* apply map_disjoint_singleton_l_2.
+rewrite lookup_singleton_ne; done. 
+Admitted.
+  
 
 
   (*
@@ -1111,6 +1179,9 @@ Inductive prop : Set :=
   Inductive Contract  := 
      | ForallC (f: PL.Value -> Contract)
      | HoareTriple (pre : prop) (program : PL.Prog) (arg:PL.Value) (post :PL.Value -> prop).
+
+
+
 
   Fixpoint phoas_to_hoas_contract (c : Phoas.Contract PL.Value ) : Contract :=
     match c with
@@ -1481,6 +1552,7 @@ Definition Wstore (V A:Set) := (A -> stringmap V -> Phoas.prop V) -> stringmap V
   Variable (acc : relation World).
   Variable  (pre : PreOrder acc).
   Variable ( V A: Set) (wfA :Pred World A) (wfV :Pred World V).
+  Variable (VA : PL.ValueAlgebra V).
   Variable (weaken : Phoas.Weakening acc wfV).
 
 Definition WfFunc {World: Type} {A B : Set} (wfA :Pred World A) (wfB : Pred World B) : Pred World (A -> B) :=
@@ -1775,7 +1847,7 @@ Proof using weaken.
   - eapply Hs. exact Hlookup.
 Qed.
 
-  Lemma wf_exec_exp  (VA : PL.ValueAlgebra V) 
+  Lemma wf_exec_exp  
   (like_wfV : Phoas.Like_wfexp VA wfV) (e : PL.Exp)  
     (w:World)   (varname : string)
       : Wf_Wstore wfV wfV w (exec_exp VA e).
@@ -1859,13 +1931,29 @@ Qed.
         | PL.Fun functionName param body => (Phoas.Implies (pre) (wp VA body (weaken' post) ({[ param := arg ]})))
       end
   end.
-  
+
+  Lemma wf_vc
+    (c : Phoas.Contract V) (w : World): 
+    @Phoas.wfContract World V acc wfV  w c ->
+    Phoas.wfprop acc wfV w (vc VA c). Admitted.
+
+
+  (*forall c -> Phoas.wfprop subseteq Phoas.wfe ∅ (constraintGeneration.vc c)
+  *)
   Definition vc_hoas  (c : Phoas.Contract PL.Value) : Hoas.prop :=
   Hoas.phoas_to_hoas (vc (PL.value_valueAlgebra) c).
   
   Definition vc_foas (c : Foas.Contract) : Foas.prop :=
   
-  Phoas.phoas_to_foas ∅ (vc (PL.expression_valueAlgebra) (Phoas.foas_contract_to_phoas_contract ∅ c)).
+  Phoas.phoas_to_foas ∅ (vc (PL.expression_valueAlgebra) (Phoas.foas_contract_to_phoas_contract PL.expression_valueAlgebra  ∅ c)).
+
+
+Lemma wf_exec_exp' 
+  (like_wfV : Phoas.Like_wfexp VA wfV) (e : PL.Exp)  
+    (w:World)   (varname : string)
+      : Wf_Wstore wfV wfV w (exec_exp VA e). Admitted.
+
+
 
   (* forall c, wfprop ∅ (vc_foas c) *)
 
@@ -1881,32 +1969,24 @@ Section well_formed_generation.
 Check Phoas.wfprop.
 Check Phoas.R.
 
-
+Search subseteq.
+Print Instances PreOrder.
 Lemma wfEnd_to_end (c : Foas.Contract) : Foas.wfContract c -> Foas.wfprop empty (constraintGeneration.vc_foas c).
   intros.
   destruct c.
-  inversion H.
-  unfold Foas.wfContract in H.
-  constructor in H.
-  unfold H.
-
-
-
-(*
-Inductive wfprop (Γ : stringset) : prop A -> Type :=
-    | WfT : wfprop Γ (T A)
-    | WfF : wfprop Γ (F A)
-    | WfImplies {l r} : wfprop Γ l -> wfprop Γ r -> wfprop Γ (Implies l r)
-    | WfAnd {l r} : wfprop Γ l -> wfprop Γ r -> wfprop Γ (And l r)
-    | WfOr {l r} : wfprop Γ l -> wfprop Γ r -> wfprop Γ (Or l r)
-    | WfForall {f : A -> prop A} :
-        (forall (a : A) Γ', subseteq Γ Γ' -> WA Γ' a -> wfprop Γ' (f a)) ->
-        wfprop Γ (Forall f)
-    | WfCmp {r : Relop} {a b : A} : WA Γ a -> WA Γ b -> wfprop Γ (Cmp r a b).
-
-
-
-*)
+  destruct X as [[[Hwfpre Hwfprog] Harg] Hwfpost].
+  unfold constraintGeneration.vc_foas.
+  eapply Phoas.wfphoas_to_foas. (*phoas to foas*)
+  - apply stringset.
+  - eapply constraintGeneration.wf_vc . (*vc*)
+      * apply set_subseteq_preorder. 
+      * apply Phoas.wfe.
+      * apply Phoas.weakening_wfe.
+    * eapply Phoas.wf_foas_to_phoas_contract. (*foas to phoas*)
+        + apply Phoas.like_wfexp_exp.
+        + apply Phoas.weakening_wfe.
+        + constructor; eauto.
+Qed.
 
 
 
