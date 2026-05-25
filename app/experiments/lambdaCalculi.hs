@@ -11,10 +11,16 @@ import Control.Monad.State
 import Data.Char
 import Data.Map
 
+
+module Foas
+
 data Foas_Exp = Var String
     | Lambda String Foas_Exp
     | App Foas_Exp Foas_Exp
     deriving (Eq,Show)
+
+
+
 
 data Hoas_Exp = HLambda (Hoas_Exp -> Hoas_Exp)
     | HApp Hoas_Exp Hoas_Exp
@@ -34,6 +40,12 @@ data DBTerm = DBVar Int
     | DBLam DBTerm
     | DBApp DBTerm DBTerm
     deriving (Show,Eq)
+
+    data FirstOrderContract = MkContract [LVar]    -- quantifiers
+                                    (FoasProp) -- precondition
+                                    Prog [Exp] --program and its parameters 
+                                    LVar --name of the result in the postcondition     
+                                    FoasProp -- postcondition
 
 
 
@@ -65,6 +77,12 @@ deBruinI :: DBTerm
 deBruinI = DBLam (DBVar 0)
 
 
+exotic :: Lam
+exotic = Lambda (\x -> case x of 
+                            | Lam f -> x
+                            | App a b -> Lam (\x -> x))
+    
+
 --combinator B (function composition) for the term 
 foasB :: Foas_Exp
 foasB = Lambda "x" (Lambda "y" (Lambda "z" (App (Var "x") (App (Var "y") (Var "z")))))
@@ -80,6 +98,11 @@ typeclass_hoasB = lam (\x->lam (\y->lam (\z->app x (app y z))))
 
 deBruinB :: DBTerm
 deBruinB = DBLam (DBLam (DBLam (DBApp (DBVar 2) (DBApp (DBVar 1) (DBVar 0)))))
+
+
+DBLam DBLam (DBApp (DBVar 1) (DBVar 0))
+
+
 
 -- Y combinator = λf. (λx. f (x x)) (λx. f (x x))
 foasY :: Foas_Exp

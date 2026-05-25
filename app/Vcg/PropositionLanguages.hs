@@ -26,8 +26,6 @@ data Prop = T
     | Exist (Value->Prop)
     | Forall (Value->Prop)
 
-
-
 data FoasProp = FoasT
     | FoasF
     | FoasCmp Relop Exp Exp -- these can be both LVars as values 
@@ -39,6 +37,14 @@ data FoasProp = FoasT
     | FoasForall LVar FoasProp
     deriving (Eq,Show)
 
+
+data Exp = 
+    | Var String
+    | Lit Int
+
+data Prop = 
+    | GreaterThan Exp Exp -- these can be both LVars as values 
+    | FoasExist String Prop
 
 
 
@@ -228,13 +234,13 @@ binary_prop_to_foas_state p1 p2 bin = do r1 <- phoas_to_foas_state p1
                                          return $ bin r1 r2
 ---------------------------
 
-phoas_to_foas_state_exp :: PhoasProp (Exp) -> FoasProp
+phoas_to_foas_state_exp :: PhoasProp Exp -> FoasProp
 phoas_to_foas_state_exp phoasProp = evalState (phoas_to_foas_state' phoasProp) 0
 
 
 
 
-phoas_to_foas_state' :: PhoasProp ( Exp) -> StateInt FoasProp
+phoas_to_foas_state' :: PhoasProp Exp -> StateInt FoasProp
 phoas_to_foas_state' PhoasT = return FoasT
 phoas_to_foas_state' PhoasF = return FoasF
 phoas_to_foas_state' (PhoasCmp op l r) = return $ FoasCmp op l r
@@ -246,9 +252,6 @@ phoas_to_foas_state' (PhoasImplies p1 p2)= binary_prop_to_foas_state' p1 p2 Foas
 phoas_to_foas_state' (PhoasExist f)    = quantifiers_to_foas_state' f FoasExist
 phoas_to_foas_state' (PhoasForall f)   = quantifiers_to_foas_state' f FoasForall
 
-
-
-
 -- interprets a quantifier
 quantifiers_to_foas_state' ::  (( Exp)->PhoasProp ( Exp))->(LVar->FoasProp->FoasProp)->StateInt FoasProp
 quantifiers_to_foas_state' f quantifier=do i <- get
@@ -256,10 +259,6 @@ quantifiers_to_foas_state' f quantifier=do i <- get
                                            modify (+1)
                                            body <- (phoas_to_foas_state' $ (f (Var arg)))
                                            return $ quantifier arg body
-                                            
-
-
-
 --interprets a binary propositional operator.
 binary_prop_to_foas_state' :: (PhoasProp ( Exp))->(PhoasProp ( Exp))->(FoasProp->FoasProp->FoasProp)->StateInt FoasProp
 binary_prop_to_foas_state' p1 p2 bin = do r1 <- phoas_to_foas_state' p1

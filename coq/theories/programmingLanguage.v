@@ -357,7 +357,7 @@ Fixpoint semant_Relop (r:Relop) : PL.Value->PL.Value->Prop :=
     
     end.
 
-      Definition Pred (World : Type) (X : Set) := World-> X -> Type.
+      Definition WF (World : Type) (X : Set) := World-> X -> Type.
  
 Module Foas.
 
@@ -521,7 +521,7 @@ Inductive prop (A : Set) : Set :=
   | Forall (f : A ->  prop A)
   | Cmp (r:Relop) (a : A) (b:A).
   
-   Class Weakening (V:Set)  (World: Type) (Acc: relation World) (WA: Pred World V) := {
+   Class Weakening (V:Set)  (World: Type) (Acc: relation World) (WA: WF World V) := {
     weaken : forall (Γ Γ' : World) (v:V), Acc Γ Γ' -> WA Γ v -> WA Γ' v
 }.
   Section WithA.
@@ -529,7 +529,7 @@ Inductive prop (A : Set) : Set :=
     Context {World : Type} (Acc : relation World) {pre : PreOrder Acc}.
 
     Variable (A : Set).
-    Variable (WA :Pred World A).
+    Variable (WA :WF World A).
     Variable (weaken : Weakening Acc WA).
     Inductive wfprop (w : World) : prop A -> Type :=
     | WfT : wfprop w (T A)
@@ -586,7 +586,7 @@ Inductive prop (A : Set) : Set :=
      | ForallC (f: V -> Contract V)
      | HoareTriple (pre : prop V) (program : PL.Prog) (arg:V) (post :V -> prop V).
   
-  Inductive wfContract (World : Type) (V:Set) {acc : relation World} (wfV : Pred World V) (w:World) :  Contract V -> Prop :=
+  Inductive wfContract (World : Type) (V:Set) {acc : relation World} (wfV : WF World V) (w:World) :  Contract V -> Prop :=
   | WfForallC {f : V -> Contract V} :
         (forall (v : V) w', acc w w' -> wfV w' v -> wfContract  wfV w' (f v)) ->
         wfContract  wfV w (ForallC f)
@@ -598,6 +598,7 @@ Inductive prop (A : Set) : Set :=
           wfprop acc wfV w' (post result)) -> 
           wfContract wfV w (HoareTriple pre program arg post)
           .
+    
      
    
      
@@ -658,15 +659,15 @@ Inductive prop (A : Set) : Set :=
 
 
 
-Class Like_wfexp (World : Type) (V:Set) (VA: PL.ValueAlgebra V) 
-(WA: Pred World V)  := {
+Class WF_VA (World : Type) (V:Set) (VA: PL.ValueAlgebra V) 
+(WA: WF World V)  := {
     wf_lit : forall Γ n, WA Γ (PL.lit n);
     wf_add : forall Γ v1 v2, WA Γ v1 -> WA Γ v2 -> WA Γ (PL.add v1 v2);
    (*wf_add_elim : forall Γ v1 v2,  WA Γ (PL.add v1 v2) -> WA Γ v1 * WA Γ v2 *)
 }.
 
 (*
-Inductive wfValueAlgebraLemma (World : Type) (V:Set) (WA : Pred World V) (Γ : World) : (PL.ValueAlgebra V) -> Type :=
+Inductive wfValueAlgebraLemma (World : Type) (V:Set) (WA : WF World V) (Γ : World) : (PL.ValueAlgebra V) -> Type :=
   | WfLit : forall n,  wfValueAlgebraLemma ()
   | WfAdd e1 e2 :
         wfValueAlgebraLemma e1 ->
@@ -677,7 +678,7 @@ Inductive wfValueAlgebraLemma (World : Type) (V:Set) (WA : Pred World V) (Γ : W
 fun VA => (exists n, WA Γ (PL.lit n) ).
 
 
-Inductive wfValueAlgebra (World : Type) (V:Set) (WA : Pred World V) : Pred World (PL.ValueAlgebra V) :=
+Inductive wfValueAlgebra (World : Type) (V:Set) (WA : WF World V) : WF World (PL.ValueAlgebra V) :=
   fun Γ VA => (exists n, WA Γ (PL.lit n) ).
 *)
 
@@ -685,10 +686,10 @@ Inductive wfValueAlgebra (World : Type) (V:Set) (WA : Pred World V) : Pred World
 
 
 
-Definition WfStore (World : Type) (V : Set)  (WA :Pred World V) : Pred World (stringmap V) :=
-    fun (context : World) (store : stringmap V)
+Definition WfStore (World : Type) (V : Set)  (WA :WF World V) : WF World (stringmap V) :=
+    fun (w : World) (store : stringmap V)
      =>
-    forall s v, (store !! s = Some v) -> (WA context v ).
+    forall s v, (store !! s = Some v) -> (WA w v ).
  
  
 
@@ -698,14 +699,14 @@ Definition WfStore (World : Type) (V : Set)  (WA :Pred World V) : Pred World (st
 
 
 
-Lemma wf_foas_to_phoas (World : Type) (V:Set) (VA: PL.ValueAlgebra V) (store : stringmap V)  (foasprop : Foas.prop) (wfFoas : Foas.wfprop (dom store) foasprop ) :
-      forall  (acc: relation World) (context : World) WA  
-       (wfStore : WfStore WA context store ) (X : Like_wfexp VA WA) (Hweaken : Weakening  acc WA)
-       , 
+Lemma wf_foas_to_phoas (World : Type) (V:Set) (VA: PL.ValueAlgebra V) (store : stringmap V)  (foasprop : Foas.prop) (wfFoas : Foas.wfprop (dom store) foasprop ) 
+      (acc: relation World) (context : World) WA  
+       (wfStore : WfStore WA context store ) (X : WF_VA VA WA) (Hweaken : Weakening  acc WA)
+       : 
               @wfprop World acc V WA context (@foas_to_phoas V VA store foasprop).
 Proof.
 intros.
-dependent induction wfFoas.
+dependent induction wfFoas. 
 - constructor.
 - constructor.
 -  simpl. constructor.
@@ -765,10 +766,91 @@ dependent induction wfFoas.
 Qed.
 
 
+(*
+Lemma wf_foas_to_phoas' (World : Type) (V:Set) (VA: PL.ValueAlgebra V) (store : stringmap V)  (foasprop : Foas.prop) 
+      (acc: relation World) (context : World) WA  
+       (wfStore : WfStore WA context store ) (X : WF_VA VA WA) (Hweaken : Weakening  acc WA)
+       : 
+              @wfprop World acc V WA context (@foas_to_phoas V VA store foasprop).
+Proof.
+intros.
+induction foasprop. 
+- constructor.
+- constructor.
+-  simpl. constructor.
+ + induction a.
+  * simpl. apply wf_lit.
+  * simpl.
+   destruct (store !!x) .
+
+  
+  eapply (wfStore x). Check   PL.contains_implies_lookup.
+  destruct (store !!x) .
+  
+  
+  * simpl. apply wf_add; auto.
+ + eapply IHwfFoas1; auto .
+ + eapply IHwfFoas2; auto .
+-  simpl. constructor.
+ + eapply IHwfFoas1; auto.
+ + eapply IHwfFoas2; auto .
+-  simpl. constructor.
+ + eapply IHwfFoas1; auto .
+ + eapply IHwfFoas2; auto .
+ -  simpl. constructor.
+ + induction w.
+  * simpl. apply wf_lit.
+  * simpl. 
+  
+  eapply (wfStore x). Check   PL.contains_implies_lookup.
+  destruct (PL.contains_implies_lookup store e) as [v Hv]. rewrite Hv. reflexivity. 
+  
+  
+  * simpl. apply wf_add; auto.
+ + induction w0.
+  * simpl. apply wf_lit.
+  * simpl.  eapply (wfStore x). destruct (PL.contains_implies_lookup store e) as [v Hv]. rewrite Hv. reflexivity.
+  
+  * simpl. apply wf_add; auto.
+ - simpl. constructor. intros. eapply  IHwfFoas;eauto.
+  + apply variable_introduction_domain.
+  + simpl. 
+  
+  generalize (variable_introduction_domain store x a). 
+  unfold WfStore.
+  intros H0 s v Hlookup.
+  
+  (*unfold WfStore in *.
+  
+  destruct e. simpl. reflexivity.
+  
+  + unfold WfStore.
+  intros s v Hlookup.*)
+
+  destruct (decide (s = x)) as [-> | Hne].
+* (* s = x, so lookup returns a *)
+  Check lookup_insert.
+  rewrite lookup_insert in Hlookup.
+  injection Hlookup as <-.
+  apply X0.
+* rewrite lookup_insert_ne in Hlookup.
+** unfold WfStore in wfStore.
+  specialize (wfStore s v).
+  apply wfStore in Hlookup.
+  apply (weaken context w');auto.
+
+
+
+** symmetry. exact Hne.
+Qed.
+*)
+
+
+
 
 Lemma wf_foas_to_phoas2 (World : Type) (V:Set) (VA: PL.ValueAlgebra V) (store : stringmap V)  (foasprop : Foas.prop) (wfFoas : Foas.wfprop (dom store) foasprop ) :
-      forall  (acc: relation World) (context : World) (WA : Pred World V)
-       (wfStore : WfStore ( WA) context store  ) (X : Like_wfexp VA WA ) 
+      forall  (acc: relation World) (context : World) (WA : WF World V)
+       (wfStore : WfStore ( WA) context store  ) (X : WF_VA VA WA ) 
        ( HaccElem: Weakening acc ( WA)), 
               @wfprop World acc V WA  context (@foas_to_phoas V VA store foasprop).
 Proof.
@@ -813,12 +895,12 @@ Qed.
     | Phoas.Cmp r a b => Foas.Cmp r (a ) (b)
     end.
 
-  Definition wfr : Pred stringset (R PL.Exp) : Type :=
+  Definition wfr : WF stringset (R PL.Exp) : Type :=
     fun (Γ : stringset) (m : R PL.Exp)  => PL.wfexp Γ (m Γ).
 
-  Definition wfe  : Pred stringset (PL.Exp) :=
+  Definition wfe  : WF stringset (PL.Exp) :=
     fun (Γ : stringset) (m : PL.Exp) =>
-        PL.wfexp Γ (m ).
+        PL.wfexp Γ m.
 
   
 
@@ -828,9 +910,10 @@ Qed.
 
 
   
-  Lemma wfphoas_to_foas (World : Type) (Γ : stringset) (p : Phoas.prop (PL.Exp)) (wfp : @Phoas.wfprop stringset subseteq ( PL.Exp) wfe Γ p) :
+  Lemma wf_phoas_to_foas (World : Type) (Γ : stringset) (p : Phoas.prop (PL.Exp)) 
+  (wfp : @Phoas.wfprop stringset subseteq (PL.Exp) wfe Γ p) :
     Foas.wfprop Γ (phoas_to_foas Γ p).
-  Proof.
+  Proof. 
     induction wfp; cbn.
     - constructor.
     - constructor.
@@ -889,13 +972,13 @@ rewrite lookup_singleton_ne; done.
  Admitted. 
 
 
-     Theorem wf_foas_to_phoas_contract (World : Type) (V : Set) (acc : relation World)
+Theorem wf_foas_to_phoas_contract (World : Type) (V : Set) (acc : relation World)
     (VA: PL.ValueAlgebra V)
-     (wfV : Pred World V)
+     (wfV : WF World V)
     (w : World)
     (env : stringmap V)
     (c : Foas.Contract) 
-    (wfE' : Like_wfexp VA wfV)
+    (wfE' : WF_VA VA wfV)
     (weaken : Weakening acc wfV)
     :
     Foas.wfContract c ->
@@ -1050,12 +1133,12 @@ Lemma name : forall context store, @WfStore (R PL.Exp) stringset R_elem_of conte
   Qed. 
  
   
-  Instance like_wfexp_R: Like_wfexp  R_valueAlgebra  wfr  := {
+  Instance WF_VA_R: WF_VA  R_valueAlgebra  wfr  := {
     wf_lit := wf_lit_expR;
     wf_add := wf_add_expR
   }.
 
-  Instance like_wfexp_exp: Like_wfexp  PL.expression_valueAlgebra  wfe  := {
+  Instance WF_VA_exp: WF_VA  PL.expression_valueAlgebra  wfe  := {
     wf_lit := wf_lit_exp;
     wf_add := wf_add_exp
   }.
@@ -1096,7 +1179,6 @@ Lemma name : forall context store, @WfStore (R PL.Exp) stringset R_elem_of conte
   *)
   
      Check phoas_to_foas.
-     Check wfphoas_to_foas.
 
 
      (*if we have a wellscopedness proof of phoas_to_foas*)
@@ -1106,7 +1188,7 @@ Lemma name : forall context store, @WfStore (R PL.Exp) stringset R_elem_of conte
       Lemma wf_foas_to_phoas_to_foas : Foas.wfprop ∅ (phoas_to_foas ∅ (@foas_to_phoas (PL.Exp) PL.expression_valueAlgebra (empty : stringmap (PL.Exp)) simpleProp )).
       Proof.
       
-      apply wfphoas_to_foas. 
+      apply wf_phoas_to_foas. 
         * apply stringset. 
         *
       apply wf_foas_to_phoas.
@@ -1116,7 +1198,7 @@ Lemma name : forall context store, @WfStore (R PL.Exp) stringset R_elem_of conte
         intros.
         apply lookup_empty_Some in H. contradiction.
       
-      - apply like_wfexp_exp.
+      - apply WF_VA_exp.
       - apply  weakening_wfe.
 
       Qed.
@@ -1313,17 +1395,17 @@ Definition Wstore (V A:Set) := (A -> stringmap V -> Phoas.prop V) -> stringmap V
   Definition bind (V A B:Set) (c : Wstore V A) (k : A->Wstore V B) : Wstore V B :=
   fun post store1 => c (fun a store2 => (k a) post store2) store1.
 
-  Check Pred.
+  Check WF.
 
 
-  Section Preds.
+  Section WFs.
   Variable (World : Type).
   Variable (acc : relation World).
 
-Definition WfFunc {World: Type} {A B : Set} (wfA :Pred World A) (wfB : Pred World B) : Pred World (A -> B) :=
+Definition WfFunc {World: Type} {A B : Set} (wfA :WF World A) (wfB : WF World B) : WF World (A -> B) :=
 fun w f => forall (a:A), wfA w a -> wfB w (f a).
 
-  Definition Box {A : Set} ( WA : Pred World A)  : Pred World A :=
+  Definition Box {A : Set} ( WA : WF World A)  : WF World A :=
     fun w a => forall w' , acc w w' -> WA w' a .
 
 Declare Scope rel_scope.
@@ -1341,31 +1423,31 @@ Delimit Scope rel_scope with R.
 
 
 
-  (* Definition Wfprop (World: Type) (A: Set) (WA : Pred World A) (acc : relation World) : Pred World (Phoas.prop A) :=
+  (* Definition Wfprop (World: Type) (A: Set) (WA : WF World A) (acc : relation World) : WF World (Phoas.prop A) :=
     fun w p => forall w' , acc w w' -> Phoas.wfprop acc WA w' p.*)
 
     
-  Definition Wfprop'  (A: Set) (wfA : Pred World A): Pred World (Phoas.prop A) :=
+  Definition Wfprop'  (A: Set) (wfA : WF World A): WF World (Phoas.prop A) :=
     fun w p => □ (Phoas.wfprop acc wfA) w p.
 
 
 
 
-  Definition WfPost ( V A: Set) (wfA :Pred World A) (wfV :Pred World V): Pred World (A->stringmap V → Phoas.prop V) :=
+  Definition WfPost ( V A: Set) (wfA :WF World A) (wfV :WF World V): WF World (A->stringmap V → Phoas.prop V) :=
    wfA  ↣ Phoas.WfStore wfV ↣ Wfprop' wfV.
 
-  (*Definition Wf_Wstore (V A:Set)  (wfV :Pred World V) (wfA : Pred World A) : Pred World (Wstore V A):=
+  (*Definition Wf_Wstore (V A:Set)  (wfV :WF World V) (wfA : WF World A) : WF World (Wstore V A):=
   WfFunc (WfPost wfA wfV) (WfFunc (Phoas.WfStore wfV) (Wfprop' wfV))*)
 
-Definition Wf_Wstore (V A:Set)  (wfV :Pred World V) (wfA : Pred World A) : Pred World (Wstore V A):=
+Definition Wf_Wstore (V A:Set)  (wfV :WF World V) (wfA : WF World A) : WF World (Wstore V A):=
    (WfPost wfA wfV) ↣ (Phoas.WfStore wfV) ↣ (Wfprop' wfV).
 
 
-  Definition Wf_lift (V A B: Set) (wfV :Pred World V) (wfA :Pred World A) (wfB :Pred World B) : (Pred World (A -> Wstore V B)) :=
+  Definition Wf_lift (V A B: Set) (wfV :WF World V) (wfA :WF World A) (wfB :WF World B) : (WF World (A -> Wstore V B)) :=
       wfA ↣ (Wf_Wstore wfV wfB).
 
      (*
-      Definition wfContract {World:Type} (V:Set) (wfV : Pred World V) : Pred World (Contract V) :=
+      Definition wfContract {World:Type} (V:Set) (wfV : WF World V) : WF World (Contract V) :=
     fun w c => match c with 
                   | ForallC f => (WfFunc wfV (Wfprop' wfV (f v))) w v
                   | HoareTriple pre prog arg result post => (Wfprop' wfV w pre)
@@ -1378,7 +1460,7 @@ Definition Wf_Wstore (V A:Set)  (wfV :Pred World V) (wfA : Pred World A) : Pred 
      | MkContract (forallVar : string) (pre : prop) (prog : PL.Prog) (arg : string) (result: string) (post : prop).
 
     (*I am not sure about this wfstr parameter *)
-    Definition wfContract {World:Type} (wfstr :  Pred World string) : Pred World Foas.Contract :=
+    Definition wfContract {World:Type} (wfstr :  WF World string) : WF World Foas.Contract :=
     fun w c => match c with 
                   | MkContract forallVar pre prog arg result post => forall w', acc w w' -> wfstr w' forallvar -> (() w' pre)  
                 end.
@@ -1387,7 +1469,7 @@ Definition Wf_Wstore (V A:Set)  (wfV :Pred World V) (wfA : Pred World A) : Pred 
 
 
   (**)
-  Lemma wfRet  (V A: Set)  (wfV :Pred World V) (wfA :Pred World A) (w:World) (a : A) (wf_a : wfA w a) : Wf_Wstore wfV wfA w (ret a).
+  Lemma wfRet  (V A: Set)  (wfV :WF World V) (wfA :WF World A) (w:World) (a : A) (wf_a : wfA w a) : Wf_Wstore wfV wfA w (ret a).
   repeat unfold Wf_Wstore,WfFunc,WfPost, Wfprop', Box.
   intros.
   eapply X;eauto.
@@ -1402,7 +1484,7 @@ Definition bind (V A B:Set) (c : Wstore V A) (k : A->Wstore V B) : Wstore V B :=
 
   
 
-  Lemma wfBind  (V A B: Set)  (wfV :Pred World V) (wfA :Pred World A) (wfB :Pred World B) (w:World) (c : Wstore V A) (k : A->Wstore V B) (wf_c : Wf_Wstore wfV wfA w c) (wf_k : Wf_lift wfV wfA wfB w k) : Wf_Wstore wfV wfB w (bind c k).
+  Lemma wfBind  (V A B: Set)  (wfV :WF World V) (wfA :WF World A) (wfB :WF World B) (w:World) (c : Wstore V A) (k : A->Wstore V B) (wf_c : Wf_Wstore wfV wfA w c) (wf_k : Wf_lift wfV wfA wfB w k) : Wf_Wstore wfV wfB w (bind c k).
   unfold bind.
   unfold Wf_Wstore.
   unfold WfFunc.
@@ -1425,7 +1507,7 @@ Definition bind (V A B:Set) (c : Wstore V A) (k : A->Wstore V B) : Wstore V B :=
   
   
   
-  Definition WfPost' (World: Type) (A V : Set) (wfA :Pred World A) (wfV :Pred World V) (wfProp :Pred World (Phoas.prop V)) : Pred World (A->stringmap V → Phoas.prop V) :=
+  Definition WfPost' (World: Type) (A V : Set) (wfA :WF World A) (wfV :WF World V) (wfProp :WF World (Phoas.prop V)) : WF World (A->stringmap V → Phoas.prop V) :=
   wfA ↣ ((Phoas.WfStore wfV) ↣ wfProp).
   
   *) 
@@ -1440,7 +1522,7 @@ Definition bind (V A B:Set) (c : Wstore V A) (k : A->Wstore V B) : Wstore V B :=
                         | Some value => post value store
                     end.
 
-   Lemma wflookupWstore  (V : Set)  (wfV :Pred World V)  (w:World) (s : string)  : Wf_Wstore wfV wfV w (lookupWstore s).
+   Lemma wflookupWstore  (V : Set)  (wfV :WF World V)  (w:World) (s : string)  : Wf_Wstore wfV wfV w (lookupWstore s).
   unfold lookupWstore.
   unfold Wf_Wstore.
   unfold WfFunc.
@@ -1460,10 +1542,10 @@ Definition bind (V A B:Set) (c : Wstore V A) (k : A->Wstore V B) : Wstore V B :=
   Definition insertWstore (V : Set)  (varname : string) (v:V) : Wstore V unit  :=
   fun post store => post tt (insert varname v store).
 
-  Definition wf_unit : Pred World unit :=
+  Definition wf_unit : WF World unit :=
   fun w u => True.
 
-  Lemma wfinsertWstore  (V : Set)  (wfV :Pred World V)  (w:World) (varname : string) (v:V) (wf_v : wfV w v) : Wf_Wstore wfV wf_unit w (insertWstore varname v).
+  Lemma wfinsertWstore  (V : Set)  (wfV :WF World V)  (w:World) (varname : string) (v:V) (wf_v : wfV w v) : Wf_Wstore wfV wf_unit w (insertWstore varname v).
   unfold insertWstore.
   unfold Wf_Wstore.
   unfold WfFunc.
@@ -1483,21 +1565,21 @@ Definition bind (V A B:Set) (c : Wstore V A) (k : A->Wstore V B) : Wstore V B :=
   
 
   (*
-  Inductive WfExp : Pred World PL.Exp :=
+  Inductive WfExp : WF World PL.Exp :=
 | WfLit n : WfExp Γ (Lit n)
 | WfAdd e1 e2 :
   WfExp Γ e1 ->
   WfExp Γ e2 ->
   WfExp Γ (Add e1 e2).
 *)
-  Fixpoint WfExpfp (wfString : Pred World string) (w : World) (e : PL.Exp) : Type :=
+  Fixpoint WfExpfp (wfString : WF World string) (w : World) (e : PL.Exp) : Type :=
   match e with
   | PL.Lit n     => True
   | PL.Var x     => wfString w x
   | PL.Add e1 e2 => prod (WfExpfp wfString w e1) (WfExpfp wfString w e2)
   end.
 
-  Definition WfExp (wfString : Pred World string) : Pred World PL.Exp :=
+  Definition WfExp (wfString : WF World string) : WF World PL.Exp :=
     fun w e => WfExpfp wfString w e.
 
     
@@ -1514,10 +1596,10 @@ Definition bind (V A B:Set) (c : Wstore V A) (k : A->Wstore V B) : Wstore V B :=
   end.
 
 
-  Definition wf_string_store  {V:Set} (store: stringmap V) (wfV : Pred World V) : Pred World string :=
+  Definition wf_string_store  {V:Set} (store: stringmap V) (wfV : WF World V) : WF World string :=
   fun w s => forall v,  store !! s = Some v -> wfV w v.
 
-  Fixpoint WfStmfp (wfString : Pred World string) (w : World) (p : PL.Stm) : Type :=
+  Fixpoint WfStmfp (wfString : WF World string) (w : World) (p : PL.Stm) : Type :=
   match p with
   | PL.Expr e => WfExpfp wfString w e
   | PL.Let var e body => forall w', acc w w' -> wfString w' var -> WfStmfp wfString w' body 
@@ -1525,8 +1607,8 @@ Definition bind (V A B:Set) (c : Wstore V A) (k : A->Wstore V B) : Wstore V B :=
 
  
 
-  Lemma wf_exec_exp  (V:Set) (wfV :Pred World V) (VA : PL.ValueAlgebra V) 
-  (like_wfV : Phoas.Like_wfexp VA wfV) (e : PL.Exp)  (wfstr : Pred World string) 
+  Lemma wf_exec_exp  (V:Set) (wfV :WF World V) (VA : PL.ValueAlgebra V) 
+  (like_wfV : Phoas.WF_VA VA wfV) (e : PL.Exp)  (wfstr : WF World string) 
     (w:World) (wfe : WfExp wfstr w e)   (varname : string)
      (v:V)  (wf_v : wfV w v) : Wf_Wstore wfV wfV w (exec_exp VA e).
   Proof.
@@ -1581,21 +1663,21 @@ Definition Wstore (V A:Set) := (A -> stringmap V -> Phoas.prop V) -> stringmap V
   Definition bind (V A B:Set) (c : Wstore V A) (k : A->Wstore V B) : Wstore V B :=
   fun post store1 => c (fun a store2 => (k a) post store2) store1.
 
-  Check Pred.
+  Check WF.
 
 
-  Section Preds.
+  Section WFs.
   Variable (World : Type).
   Variable (acc : relation World).
   Variable  (pre : PreOrder acc).
-  Variable ( V A: Set) (wfA :Pred World A) (wfV :Pred World V).
+  Variable ( V A: Set) (wfA :WF World A) (wfV :WF World V).
   Variable (VA : PL.ValueAlgebra V).
   Variable (weaken : Phoas.Weakening acc wfV).
 
-Definition WfFunc {World: Type} {A B : Set} (wfA :Pred World A) (wfB : Pred World B) : Pred World (A -> B) :=
+Definition WfFunc {World: Type} {A B : Set} (wfA :WF World A) (wfB : WF World B) : WF World (A -> B) :=
 fun w f => forall (a:A), wfA w a -> wfB w (f a).
 
-  Definition Box {A : Set} ( WA : Pred World A)  : Pred World A :=
+  Definition Box {A : Set} (WA : WF World A)  : WF World A :=
     fun w a => forall w' , acc w w' -> WA w' a .
 
 Declare Scope rel_scope.
@@ -1621,31 +1703,32 @@ Lemma refl : forall w, acc w w.
   Hint Resolve trans : core.
 
 
-  (* Definition Wfprop (World: Type) (A: Set) (WA : Pred World A) (acc : relation World) : Pred World (Phoas.prop A) :=
+  (* Definition Wfprop (World: Type) (A: Set) (WA : WF World A) (acc : relation World) : WF World (Phoas.prop A) :=
     fun w p => forall w' , acc w w' -> Phoas.wfprop acc WA w' p.*)
 
     
-  Definition Wfprop  (A: Set) (wfA : Pred World A): Pred World (Phoas.prop A) :=
+  Definition Wfprop  (A: Set) (wfA : WF World A): WF World (Phoas.prop A) :=
     fun w p =>   (Phoas.wfprop acc wfA) w p.
 
 
 
 
-  Definition WfPost ( V A: Set) (wfA :Pred World A) (wfV :Pred World V): Pred World (A->stringmap V → Phoas.prop V) :=
+  Definition WfPost ( V A: Set) (wfA :WF World A) (wfV :WF World V): WF World (A->stringmap V → Phoas.prop V) :=
    wfA  ↣ Phoas.WfStore wfV ↣ Wfprop wfV.
 
-  (*Definition Wf_Wstore (V A:Set)  (wfV :Pred World V) (wfA : Pred World A) : Pred World (Wstore V A):=
+  (*Definition Wf_Wstore (V A:Set)  (wfV :WF World V) (wfA : WF World A) : WF World (Wstore V A):=
   WfFunc (WfPost wfA wfV) (WfFunc (Phoas.WfStore wfV) (Wfprop' wfV))*)
 
-Definition Wf_Wstore (V A:Set)  (wfV :Pred World V) (wfA : Pred World A) : Pred World (Wstore V A):=
-   □ (WfPost wfA wfV) ↣ (Phoas.WfStore wfV) ↣ (Wfprop wfV).
+Definition Wf_Wstore (V A:Set)  (wfV :WF World V) (wfA : WF World A) : WF World (Wstore V A):=
+   (□ (WfPost wfA wfV)) ↣ (Phoas.WfStore wfV) ↣ (Wfprop wfV).
 
 
-  Definition Wf_lift (V A B: Set) (wfV :Pred World V) (wfA :Pred World A) (wfB :Pred World B) : (Pred World (A -> Wstore V B)) :=
+
+  Definition Wf_lift (V A B: Set) (wfV :WF World V) (wfA :WF World A) (wfB :WF World B) : (WF World (A -> Wstore V B)) :=
       wfA ↣ (Wf_Wstore wfV wfB).
 
      (*
-      Definition wfContract {World:Type} (V:Set) (wfV : Pred World V) : Pred World (Contract V) :=
+      Definition wfContract {World:Type} (V:Set) (wfV : WF World V) : WF World (Contract V) :=
     fun w c => match c with 
                   | ForallC f => (WfFunc wfV (Wfprop' wfV (f v))) w v
                   | HoareTriple pre prog arg result post => (Wfprop' wfV w pre)
@@ -1658,7 +1741,7 @@ Definition Wf_Wstore (V A:Set)  (wfV :Pred World V) (wfA : Pred World A) : Pred 
      | MkContract (forallVar : string) (pre : prop) (prog : PL.Prog) (arg : string) (result: string) (post : prop).
 
     (*I am not sure about this wfstr parameter *)
-    Definition wfContract {World:Type} (wfstr :  Pred World string) : Pred World Foas.Contract :=
+    Definition wfContract {World:Type} (wfstr :  WF World string) : WF World Foas.Contract :=
     fun w c => match c with 
                   | MkContract forallVar pre prog arg result post => forall w', acc w w' -> wfstr w' forallvar -> (() w' pre)  
                 end.
@@ -1668,7 +1751,7 @@ Definition Wf_Wstore (V A:Set)  (wfV :Pred World V) (wfA : Pred World A) : Pred 
   
 
   (**)
-  Lemma wfRet  (C : Set) (w:World) (c : C) (wfC : Pred World C) (wf_a : wfC w c) : Wf_Wstore wfV wfC w (ret c).
+  Lemma wfRet  (C : Set) (w:World) (c : C) (wfC : WF World C) (wf_c : wfC w c) : Wf_Wstore wfV wfC w (ret c).
   repeat unfold Wf_Wstore,WfFunc,WfPost, Wfprop, Box.
   intros.
   eapply X;eauto.
@@ -1681,14 +1764,14 @@ Definition bind (V A B:Set) (c : Wstore V A) (k : A->Wstore V B) : Wstore V B :=
   
   *)
 
-  Lemma S   : forall (p : Pred World V) (w : World) (v : V), Box wfV w v -> wfV w v.
+  Lemma S   : forall (p : WF World V) (w : World) (v : V), Box wfV w v -> wfV w v.
   Proof using pre.
   intros.
   apply X.
   reflexivity.
   Qed.
 
-  Lemma positive_introspection  : forall (p : Pred World V) (w : World) (v : V), Box wfV w v -> Box (Box wfV) w v.
+  Lemma positive_introspection  : forall (p : WF World V) (w : World) (v : V), Box wfV w v -> Box (Box wfV) w v.
   Proof using pre.
   unfold Box in *.
   
@@ -1700,7 +1783,7 @@ Definition bind (V A B:Set) (c : Wstore V A) (k : A->Wstore V B) : Wstore V B :=
   
   
 
-  Lemma wfBind  (C B: Set) (wfC : Pred World C)  (wfB :Pred World B) 
+  Lemma wfBind  (C B: Set) (wfC : WF World C)  (wfB :WF World B) 
   (w:World) (c : Wstore V C) (k : C->Wstore V B) 
   (wf_c : Wf_Wstore wfV wfC w c) (wf_k : Box ( Wf_lift wfV wfC wfB ) w k) : Wf_Wstore wfV wfB w (bind c k).
   unfold bind.
@@ -1739,7 +1822,7 @@ Definition bind (V A B:Set) (c : Wstore V A) (k : A->Wstore V B) : Wstore V B :=
   
   
   
-  Definition WfPost' (World: Type) (A V : Set) (wfA :Pred World A) (wfV :Pred World V) (wfProp :Pred World (Phoas.prop V)) : Pred World (A->stringmap V → Phoas.prop V) :=
+  Definition WfPost' (World: Type) (A V : Set) (wfA :WF World A) (wfV :WF World V) (wfProp :WF World (Phoas.prop V)) : WF World (A->stringmap V → Phoas.prop V) :=
   wfA ↣ ((Phoas.WfStore wfV) ↣ wfProp).
   
   *) 
@@ -1772,7 +1855,7 @@ Definition bind (V A B:Set) (c : Wstore V A) (k : A->Wstore V B) : Wstore V B :=
   Definition insertWstore (V : Set)  (varname : string) (v:V) : Wstore V unit  :=
   fun post store => post tt (insert varname v store).
 
-  Definition wf_unit : Pred World unit :=
+  Definition wf_unit : WF World unit :=
   fun w u => True.
 
   Lemma wfinsertWstore  (w:World) (varname : string) (v:V) (wf_v : wfV w v) : Wf_Wstore wfV wf_unit w (insertWstore varname v).
@@ -1795,21 +1878,21 @@ Definition bind (V A B:Set) (c : Wstore V A) (k : A->Wstore V B) : Wstore V B :=
   
 
   (*
-  Inductive WfExp : Pred World PL.Exp :=
+  Inductive WfExp : WF World PL.Exp :=
 | WfLit n : WfExp Γ (Lit n)
 | WfAdd e1 e2 :
   WfExp Γ e1 ->
   WfExp Γ e2 ->
   WfExp Γ (Add e1 e2).
 *)
-  Fixpoint WfExpfp (wfString : Pred World string) (w : World) (e : PL.Exp) : Type :=
+  Fixpoint WfExpfp (wfString : WF World string) (w : World) (e : PL.Exp) : Type :=
   match e with
   | PL.Lit n     => True
   | PL.Var x     => wfString w x
   | PL.Add e1 e2 => prod (WfExpfp wfString w e1) (WfExpfp wfString w e2)
   end.
 
-  Definition WfExp (wfString : Pred World string) : Pred World PL.Exp :=
+  Definition WfExp (wfString : WF World string) : WF World PL.Exp :=
     fun w e => WfExpfp wfString w e.
 
     
@@ -1826,10 +1909,10 @@ Definition bind (V A B:Set) (c : Wstore V A) (k : A->Wstore V B) : Wstore V B :=
   end.
 
 
-  Definition wf_string_store  {V:Set} (store: stringmap V) (wfV : Pred World V) : Pred World string :=
+  Definition wf_string_store  {V:Set} (store: stringmap V) (wfV : WF World V) : WF World string :=
   fun w s => forall v,  store !! s = Some v -> wfV w v.
 
-  Fixpoint WfStmfp (wfString : Pred World string) (w : World) (p : PL.Stm) : Type :=
+  Fixpoint WfStmfp (wfString : WF World string) (w : World) (p : PL.Stm) : Type :=
   match p with
   | PL.Expr e => WfExpfp wfString w e
   | PL.Let var e body => forall w', acc w w' -> wfString w' var -> WfStmfp wfString w' body 
@@ -1885,7 +1968,7 @@ Proof using weaken.
 Qed.
 
   Lemma wf_exec_exp  
-  (like_wfV : Phoas.Like_wfexp VA wfV) (e : PL.Exp)  
+  (like_wfV : Phoas.WF_VA VA wfV) (e : PL.Exp)  
     (w:World)   (varname : string)
       : Wf_Wstore wfV wfV w (exec_exp VA e).
   Proof.
@@ -1986,7 +2069,7 @@ Qed.
 
 
 Lemma wf_exec_exp' 
-  (like_wfV : Phoas.Like_wfexp VA wfV) (e : PL.Exp)  
+  (like_wfV : Phoas.WF_VA VA wfV) (e : PL.Exp)  
     (w:World)   (varname : string)
       : Wf_Wstore wfV wfV w (exec_exp VA e). Admitted.
 
@@ -1999,7 +2082,7 @@ Lemma wf_exec_exp'
     every operation needs lemma
   *)
 
-End Preds.
+End WFs.
   End constraintGeneration.
 
 Section well_formed_generation.
@@ -2008,27 +2091,33 @@ Check Phoas.R.
 
 Search subseteq.
 Print Instances PreOrder.
-Lemma wfEnd_to_end (c : Foas.Contract) : Foas.wfContract c -> Foas.wfprop empty (constraintGeneration.vc_foas c).
+
+
+
+Lemma wf_vc_foas (c : Foas.Contract) : Foas.wfContract c -> Foas.wfprop empty (constraintGeneration.vc_foas c).
   intros.
   destruct c.
   destruct X as [[[Hwfpre Hwfprog] Harg] Hwfpost].
   unfold constraintGeneration.vc_foas.
-  eapply Phoas.wfphoas_to_foas. (*phoas to foas*)
+  eapply Phoas.wf_phoas_to_foas. (*phoas to foas*)
   - apply stringset.
   - eapply constraintGeneration.wf_vc . (*vc*)
       * apply set_subseteq_preorder. 
       * apply Phoas.wfe.
       * apply Phoas.weakening_wfe.
     * eapply Phoas.wf_foas_to_phoas_contract. (*foas to phoas contract*)
-        + apply Phoas.like_wfexp_exp.
+        + apply Phoas.WF_VA_exp.
         + apply Phoas.weakening_wfe.
         + constructor; eauto.
 Qed.
 
 
-
-Lemma weakening : forall (V:Set) (Γ:stringset) Γ' (p:Phoas.prop V) (wfV : stringset->V->Type),  Phoas.wfprop wfV Γ p ->  Γ ⊆ Γ' -> Phoas.wfprop wfV Γ' p.
+Lemma weakening : forall (V:Set) (Γ:stringset) Γ' (p:Phoas.prop V) (wfV : stringset->V->Type) acc,  Phoas.wfprop acc wfV Γ p ->  Γ ⊆ Γ' -> Phoas.wfprop acc wfV Γ' p.
 Proof.
+
+Admitted.
+
+(*
 intros.
 induction p.
 - constructor.
@@ -2042,14 +2131,15 @@ induction p.
 - constructor; inversion X.
   + exact (IHp1 X0).
   + exact (IHp2 X1).
-- constructor. inversion X. intros. specialize (X1 a Γ'0). 
+- constructor. inversion X. intros. specialize (X1 a Γ'). 
   pose proof (transitivity H H0).
   apply (X1 H2 X2).
 - constructor; inversion X.
 Search (subseteq _ _ -> subseteq _ _ -> subseteq _ _).
 + admit.
 + admit.
-Admitted.
+*)
+
 (*
 pose proof (subset_trans H H0).
 Search set.
@@ -2064,17 +2154,17 @@ eapply Phoas.WfImplies in X.
 *)
 
 
-Lemma vc_well_formed: forall (V:Set) (VA : PL.ValueAlgebra V) Γ wfV c, Phoas.wfprop wfV Γ (constraintGeneration.vc VA c).
+Lemma vc_well_formed: forall (V:Set) (VA : PL.ValueAlgebra V) (World:Type) (Γ:World) wfV c acc , Phoas.wfprop acc  wfV Γ (constraintGeneration.vc VA c).
 Proof.
 intros.
 induction c.
 - simpl. constructor. intros. pose proof (X a).
-eapply (weakening X1 H).
+admit.
 -   admit.
 Admitted.
 
 
-End well_scoped_generation.
+End well_formed_generation.
 
 
 
@@ -2129,6 +2219,10 @@ Lemma wpWeakest : forall  (post : PL.Value->stringmap PL.Value->Phoas.prop PL.Va
  
   
   *)
+
+
+
+  
 
    Lemma translation_irrelevance : forall c pre prog post,
     Hoas.phoas_to_hoas_contract c =  Hoas.ForallC  (λ v : PL.Value,
@@ -2222,4 +2316,4 @@ Lemma wpWeakest : forall  (post : PL.Value->stringmap PL.Value->Phoas.prop PL.Va
   
   
   Lemma adequacy (contract:Foas.Contract) : 
-  Foas.semant nil (vc_foas contract) -> adequate contract. 
+  Foas.semant nil (vc_foas contract) -> adequate contract.

@@ -132,12 +132,6 @@ exec_list' (stm:rest) acc c = do v <- (exec stm c)
 exec_list' [] acc _ = return acc
 
 
-
-interpret_with ::ValueAlgebra v =>  (Map LVar v) -> [LVar] -> [v]
-interpret_with m lvars = Data.Maybe.mapMaybe (\lvar -> Map.lookup lvar m) lvars
-
-
-
 exec :: ValueAlgebra v=> Stm->Contract v->Wstore v v
 exec (Expr expr) _= exec_exp expr
 exec (Assign var s) c = do v <- exec s c -- evaluate the value that will be given to the variable
@@ -154,8 +148,7 @@ exec (Seq s1 s2) c = do _ <- exec s1 c -- evaluate the first statement
 exec (If bexp s1 s2) c = do b <- execb bexp
                             matchBool_demonic b (exec s1 c) (exec s2 c)
 exec (Recurse stmList) c = 
-          do 
-            exec_recursion (Recurse stmList) c c
+          do exec_recursion (Recurse stmList) c c
 
 
 
@@ -176,7 +169,6 @@ exec_recursion (Recurse stmList) (HoareTriple pre _ inputs post) c =
              v_result <- demonic -- get a result
              assume (post v_result) -- We assume that the postcondition holds for the result
              return v_result
-
 exec_recursion _ _ _  = do Vcg.ConstraintGeneration.fail -- this function should only be called when there is recursion
 
 
