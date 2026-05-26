@@ -150,7 +150,8 @@ exec (If bexp s1 s2) c = do b <- execb bexp
 exec (Recurse stmList) c = 
           do exec_recursion (Recurse stmList) c c
 
-
+exec (If bexp s1 s2) c = do b <- execb bexp
+                            matchBool_demonic b (exec s1 c) (exec s2 c)
 
                       
 allEqual :: [v]->[v]-> PhoasProp v

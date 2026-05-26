@@ -73,14 +73,19 @@ just_recursion_stm i= Recurse (map (\i -> Expr (Var ("l" ++ show i))) [1..i])
 
 
 benchmark_stm_if :: Int -> Stm
-benchmark_stm_if 0= Expr $ Lit 0
-benchmark_stm_if n= Seq (If (Cmp Equal (Lit 0) (Var ("l" ++ show i)))) (benchmark_stm_if (n-1))
+benchmark_stm_if 0= Expr $ Var "x"
+benchmark_stm_if n= Seq (If (Compare Equal (Lit 0) (Var "x")) 
+                                (Assign "x" (Expr (Lit 1)))
+                                (Assign "x" (Expr (Lit 0)))) (benchmark_stm_if (n-1))
+
+benchmark_prog_if :: Int -> Prog
+benchmark_prog_if n = Fun "f" ["x"] (benchmark_stm_if n)
 
 
 
 
 benchmark_program :: Int -> Prog
-benchmark_program n =Fun "f" (map (\i -> "i" ++ show i) [1 .. n]) (benchmark_stm n)
+benchmark_program n = Fun "f" (map (\i -> "i" ++ show i) [1 .. n]) (benchmark_stm n)
 
 benchmark_program_far :: Int -> Prog
 benchmark_program_far n = Fun "f" (map (\i -> "i" ++ show i) [1 .. n]) (benchmark_stm_far n n)
@@ -120,6 +125,13 @@ sizeDBProp (DBImplies p q)      = 1 + sizeDBProp p + sizeDBProp q
 sizeDBProp (DBExist p)          = 1 + sizeDBProp p
 sizeDBProp (DBForall p)         = 1 + sizeDBProp p
 
+-- worst case
+
+
+
+
+
+
 -----------------------benchmarking end-to-end------------------------
 benchmark_foas_contract :: Int ->  FirstOrderContract
 benchmark_foas_contract n = MkContract (map (\i -> "i" ++ show i) [1 .. n]) (benchmark_foas_prop_close n) (benchmark_program n) (map (\i -> Var ("i" ++ show i)) [1 .. n]) "result" (benchmark_foas_prop_close n) 
@@ -139,7 +151,13 @@ benchmark_foas_contract_just_recursion_no_post n = MkContract (map (\i -> "i" ++
 benchmark_foas_contract_just_recursion_no_pre_post :: Int ->  FirstOrderContract
 benchmark_foas_contract_just_recursion_no_pre_post n = MkContract (map (\i -> "i" ++ show i) [1 .. n]) (FoasT) (just_recursion_prog n) (map (\i -> Var ("i" ++ show i)) [1 .. n]) "result" (FoasT) 
 
+benchmark_contract_if :: Int ->  FirstOrderContract
+benchmark_contract_if n = MkContract ["x"] (FoasT) (benchmark_prog_if n) [Var "x"] "result" (FoasCmp Equal (Var "result") (Lit 0)) 
 
+
+
+benchmark_if_contract :: Int -> Int
+benchmark_if_contract  =  sizeFoasProp . vcFoas_reader_exp . benchmark_contract_if
 
 
 benchmark_reader_reader :: Int -> Int
@@ -247,17 +265,34 @@ benchmark_just_recursion_no_post = sizeDBProp . vcFoas_db . benchmark_foas_contr
 
 benchmark_just_recursion_no_pre_post :: Int->Int
 benchmark_just_recursion_no_pre_post = sizeDBProp . vcFoas_db . benchmark_foas_contract_just_recursion_no_pre_post
+-----
+benchmark_reader_reader_if :: Int -> Int
+benchmark_reader_reader_if  = sizeFoasProp . vcFoas_reader_reader . benchmark_contract_if
+
+benchmark_reader_exp_if :: Int -> Int
+benchmark_reader_exp_if  = sizeFoasProp . vcFoas_reader_exp . benchmark_contract_if
+
+benchmark_state_state_if :: Int -> Int
+benchmark_state_state_if = sizeFoasProp . vcFoas_state_state . benchmark_contract_if
+
+benchmark_state_exp_if :: Int -> Int
+benchmark_state_exp_if  = sizeFoasProp . vcFoas_state_exp . benchmark_contract_if
+
+benchmark_db_if :: Int -> Int
+benchmark_db_if  = sizeDBProp . vcFoas_db . benchmark_contract_if
 
 
-
+benchmark_values_linear :: Int-> [Int]
+benchmark_values_linear n = map (3*) [1..n]
 
 runBenchmark :: IO ()
-runBenchmark = defaultMainWith (defaultConfig { csvFile = Just "just_recursion.csv" }) $
-  [ bgroup "just recursion"
-      [ bgroup "db"                  [ bench (show n) $ whnf benchmark_just_recursion           n | n <- benchmark_values 7 ]
-      , bgroup "db no pre"           [ bench (show n) $ whnf benchmark_just_recursion_no_pre    n | n <- benchmark_values 7 ]
-      , bgroup "db no post"          [ bench (show n) $ whnf benchmark_just_recursion_no_post   n | n <- benchmark_values 7 ]
-      , bgroup "db no pre post"      [ bench (show n) $ whnf benchmark_just_recursion_no_pre_post n | n <- benchmark_values 7 ]
+runBenchmark = defaultMainWith (defaultConfig { csvFile = Just "if2.csv" }) $
+  [ bgroup "if"
+      [ bgroup "reader reader" [ bench (show n) $ whnf benchmark_reader_reader_if n | n <- benchmark_values_linear 7 ]
+      , bgroup "reader exp"    [ bench (show n) $ whnf benchmark_reader_exp_if    n | n <- benchmark_values_linear 7 ]
+      , bgroup "state state"   [ bench (show n) $ whnf benchmark_state_state_if   n | n <- benchmark_values_linear 7 ]
+      , bgroup "state exp"     [ bench (show n) $ whnf benchmark_state_exp_if     n | n <- benchmark_values_linear 7 ]
+      , bgroup "db"            [ bench (show n) $ whnf benchmark_db_if             n | n <- benchmark_values_linear 7 ]
       ]
   ]
   

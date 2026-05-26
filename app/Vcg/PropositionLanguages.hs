@@ -38,13 +38,7 @@ data FoasProp = FoasT
     deriving (Eq,Show)
 
 
-data Exp = 
-    | Var String
-    | Lit Int
 
-data Prop = 
-    | GreaterThan Exp Exp -- these can be both LVars as values 
-    | FoasExist String Prop
 
 
 

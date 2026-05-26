@@ -93,10 +93,20 @@ maxAdditionContractPhoas  = ForallC (\x -> ForallC (\y ->
 
 
 firstOrderAbsContract :: FirstOrderContract
-firstOrderAbsContract=  MkContract ["x"] FoasT absoluteValue [Var "x"] "result" $ FoasAnd (FoasCmp GreaterThanEqual (Var "result") (Lit 0)) (FoasCmp GreaterThanEqual (Var "result") (Var "x"))
+firstOrderAbsContract=  MkContract ["x"] 
+                                    FoasT 
+                                    absoluteValue [Var "x"]
+                                     "result" $ 
+                                     FoasAnd (FoasCmp GreaterThanEqual (Var "result") (Lit 0))
+                                             (FoasCmp GreaterThanEqual (Var "result") (Var "x"))
 
 absoluteValueContract :: ValueAlgebra v => Contract v
-absoluteValueContract = ForallC (\x->HoareTriple PhoasT absoluteValue [x] (\result->PhoasAnd (PhoasCmp GreaterThanEqual result (lit 0)) (PhoasCmp GreaterThanEqual result x)))
+absoluteValueContract = ForallC (\x->
+                              HoareTriple 
+                              PhoasT 
+                              absoluteValue [x] 
+                              (\result-> PhoasAnd (PhoasCmp GreaterThanEqual result (lit 0)) 
+                                                  (PhoasCmp GreaterThanEqual result x)))
 
 mySumFoasContract :: FirstOrderContract
 mySumFoasContract = MkContract ["in"] (FoasCmp GreaterThanEqual (Var "in") (Lit 0)) mySum [Var "in"] "result" (FoasCmp Equal (Mul (Lit 2) (Var "result")) (Mul (Var "in") (Add (Var "in") (Lit 1))))

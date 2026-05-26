@@ -184,9 +184,9 @@ Module PL.
 Definition Value := Z.
 (*Definition eval_store := listmap.string_map value.*)
 Inductive Exp : Set :=
-| Lit (n : Z)
-| Var (x : string)
-| Add (e1 e2 : Exp).
+  | Lit (n : Z)
+  | Var (x : string)
+  | Add (e1 e2 : Exp).
 Inductive Stm : Set :=
   | Expr (e : Exp)
   | Let (var:string) (e : Exp) (body:Stm).
@@ -2094,7 +2094,7 @@ Print Instances PreOrder.
 
 
 
-Lemma wf_vc_foas (c : Foas.Contract) : Foas.wfContract c -> Foas.wfprop empty (constraintGeneration.vc_foas c).
+Theorem wf_vc_foas : forall (c : Foas.Contract), Foas.wfContract c -> Foas.wfprop empty (constraintGeneration.vc_foas c).
   intros.
   destruct c.
   destruct X as [[[Hwfpre Hwfprog] Harg] Hwfpost].
