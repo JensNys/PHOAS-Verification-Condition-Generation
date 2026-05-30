@@ -1,0 +1,143 @@
+
+@misc{maillard2019dijkstramonads,
+	title={Dijkstra Monads for All}, 
+	author={Kenji Maillard and Danel Ahman and Robert Atkey and Guido Martinez and Catalin Hritcu and Exequiel Rivas and Éric Tanter},
+	year={2019},
+	eprint={1903.01237},
+	archivePrefix={arXiv},
+	primaryClass={cs.PL},
+	url={https://arxiv.org/abs/1903.01237}, 
+}
+
+@inproceedings{10.1145/1411204.1411226,
+	author = {Chlipala, Adam},
+	title = {Parametric higher-order abstract syntax for mechanized semantics},
+	year = {2008},
+	isbn = {9781595939197},
+	publisher = {Association for Computing Machinery},
+	address = {New York, NY, USA},
+	url = {https://doi.org/10.1145/1411204.1411226},
+	doi = {10.1145/1411204.1411226},
+	abstract = {We present parametric higher-order abstract syntax (PHOAS), a new approach to formalizing the syntax of programming languages in computer proof assistants based on type theory. Like higher-order abstract syntax (HOAS), PHOAS uses the meta language's binding constructs to represent the object language's binding constructs. Unlike HOAS, PHOAS types are definable in general-purpose type theories that support traditional functional programming, like Coq's Calculus of Inductive Constructions. We walk through how Coq can be used to develop certified, executable program transformations over several statically-typed functional programming languages formalized with PHOAS; that is, each transformation has a machine-checked proof of type preservation and semantic preservation. Our examples include CPS translation and closure conversion for simply-typed lambda calculus, CPS translation for System F, and translation from a language with ML-style pattern matching to a simpler language with no variable-arity binding constructs. By avoiding the syntactic hassle associated with first-order representation techniques, we achieve a very high degree of proof automation.},
+	booktitle = {Proceedings of the 13th ACM SIGPLAN International Conference on Functional Programming},
+	pages = {143–156},
+	numpages = {14},
+	keywords = {compiler verification, dependent types, interactive proof assistants, type-theoretic semantics},
+	location = {Victoria, BC, Canada},
+	series = {ICFP '08}
+}
+
+@article{Phoas4MechanizedSemantics,
+	author = {Chlipala, Adam},
+	title = {Parametric higher-order abstract syntax for mechanized semantics},
+	year = {2008},
+	issue_date = {September 2008},
+	publisher = {Association for Computing Machinery},
+	address = {New York, NY, USA},
+	volume = {43},
+	number = {9},
+	issn = {0362-1340},
+	url = {https://doi.org/10.1145/1411203.1411226},
+	doi = {10.1145/1411203.1411226},
+	abstract = {We present parametric higher-order abstract syntax (PHOAS), a new approach to formalizing the syntax of programming languages in computer proof assistants based on type theory. Like higher-order abstract syntax (HOAS), PHOAS uses the meta language's binding constructs to represent the object language's binding constructs. Unlike HOAS, PHOAS types are definable in general-purpose type theories that support traditional functional programming, like Coq's Calculus of Inductive Constructions. We walk through how Coq can be used to develop certified, executable program transformations over several statically-typed functional programming languages formalized with PHOAS; that is, each transformation has a machine-checked proof of type preservation and semantic preservation. Our examples include CPS translation and closure conversion for simply-typed lambda calculus, CPS translation for System F, and translation from a language with ML-style pattern matching to a simpler language with no variable-arity binding constructs. By avoiding the syntactic hassle associated with first-order representation techniques, we achieve a very high degree of proof automation.},
+	journal = {SIGPLAN Not.},
+	month = sep,
+	pages = {143–156},
+	numpages = {14},
+	keywords = {compiler verification, dependent types, interactive proof assistants, type-theoretic semantics}
+}
+
+
+@article{TypeInferenceLogics,
+	author = {Carnier, Denis and Pottier, Fran\c{c}ois and Keuchel, Steven},
+	title = {Type Inference Logics},
+	year = {2024},
+	issue_date = {October 2024},
+	publisher = {Association for Computing Machinery},
+	address = {New York, NY, USA},
+	volume = {8},
+	number = {OOPSLA2},
+	url = {https://doi.org/10.1145/3689786},
+	doi = {10.1145/3689786},
+	abstract = {Type inference is essential for statically-typed languages such as OCaml and Haskell. It can be decomposed into two (possibly interleaved) phases: a generator converts programs to constraints; a solver decides whether a constraint is satisfiable. Elaboration, the task of decorating a program with explicit type annotations, can also be structured in this way. Unfortunately, most machine-checked implementations of type inference do not follow this phase-separated, constraint-based approach. Those that do are rarely executable, lack effectful abstractions, and do not include elaboration.To close the gap between common practice in real-world implementations and mechanizations inside proof assistants, we propose an approach that enables modular reasoning about monadic constraint generation in the presence of elaboration. Our approach includes a domain-specific base logic for reasoning about metavariables and a program logic that allows us to reason abstractly about the meaning of constraints. To evaluate it, we report on a machine-checked implementation of our techniques inside the Coq proof assistant. As a case study, we verify both soundness and completeness for three elaborating type inferencers for the simply typed λ-calculus with Booleans. Our results are the first demonstration that type inference algorithms can be verified in the same form as they are implemented in practice: in an imperative style, modularly decomposed into constraint generation and solving, and delivering elaborated terms to the remainder of the compiler chain.},
+	journal = {Proc. ACM Program. Lang.},
+	month = oct,
+	articleno = {346},
+	numpages = {31},
+	keywords = {Theory of computation → Program verification, program verification, type inference, elaboration}
+}
+
+
+%this is a dummy reference to be replaced
+@article{symvcgen,
+	author = {Keuchel, Steven and Huyghebaert, Sander and Lukyanov, Georgy and Devriese, Dominique},
+	title = {Verified symbolic execution with Kripke specification monads (and no meta-programming)},
+	year = {2022},
+	issue_date = {August 2022},
+	publisher = {Association for Computing Machinery},
+	address = {New York, NY, USA},
+	volume = {6},
+	number = {ICFP},
+	url = {https://doi.org/10.1145/3547628},
+	doi = {10.1145/3547628},
+	abstract = {Verifying soundness of symbolic execution-based program verifiers is a   significant challenge. This is especially true if the resulting tool needs to be   usable outside of the proof assistant, in which case we cannot rely on shallowly   embedded assertion logics and meta-programming. The tool needs to manipulate   deeply embedded assertions, and it is crucial for efficiency to eagerly prune   unreachable paths and simplify intermediate assertions in a way that can be   justified towards the soundness proof. Only a few such tools exist in the   literature, and their soundness proofs are intricate and hard to generalize or   reuse. We contribute a novel, systematic approach for the construction and   soundness proof of such a symbolic execution-based verifier. We first implement   a shallow verification condition generator as an object language interpreter in   a specification monad, using an abstract interface featuring angelic and demonic   nondeterminism. Next, we build a symbolic executor by implementing a similar   interpreter, in a symbolic specification monad. This symbolic monad lives in a   universe that is Kripke-indexed by variables in scope and a path condition.   Finally, we reduce the soundness of the symbolic execution to the soundness of   the shallow execution by relating both executors using a Kripke logical   relation. We report on the practical application of these techniques in   Katamaran, a tool for verifying security guarantees offered by instruction set   architectures (ISAs). The tool is fully verified by combining our symbolic   execution machinery with a soundness proof of the shallow verification   conditions against an axiomatized separation logic, and an Iris-based   implementation of the axioms, proven sound against the operational semantics.   Based on our experience with Katamaran, we can report good results on   practicality and efficiency of the tool, demonstrating practical viability of   our symbolic execution approach.},
+	journal = {Proc. ACM Program. Lang.},
+	month = aug,
+	articleno = {97},
+	numpages = {31},
+	keywords = {symbolic execution, separation logic, refinement, program verification, predicate transformers, logical relations}
+}
+
+
+@misc{captureAvoiding,
+	title={Capture-Avoiding and Hygienic Program Transformations (incl. Proofs)}, 
+	author={Sebastian Erdweg and Tijs van der Storm and Yi Dai},
+	year={2014},
+	eprint={1404.5770},
+	archivePrefix={arXiv},
+	primaryClass={cs.PL},
+	url={https://arxiv.org/abs/1404.5770}, 
+}
+@inproceedings{atkey2009unembedding,
+	title={Unembedding domain-specific languages},
+	author={Atkey, Robert and Lindley, Sam and Yallop, Jeremy},
+	booktitle={Proceedings of the 2nd ACM SIGPLAN symposium on Haskell},
+	pages={37--48},
+	year={2009}
+}
+@article{10.1145/960116.54010,
+	author = {Pfenning, F. and Elliott, C.},
+	title = {Higher-order abstract syntax},
+	year = {1988},
+	issue_date = {July 1988},
+	publisher = {Association for Computing Machinery},
+	address = {New York, NY, USA},
+	volume = {23},
+	number = {7},
+	issn = {0362-1340},
+	url = {https://doi.org/10.1145/960116.54010},
+	doi = {10.1145/960116.54010},
+	abstract = {We describe motivation, design, use, and implementation of higher-order abstract syntax as a central representation for programs, formulas, rules, and other syntactic objects in program manipulation and other formal systems where matching and substitution or unification are central operations. Higher-order abstract syntax incorporates name binding information in a uniform and language generic way. Thus it acts as a powerful link integrating diverse tools in such formal environments. We have implemented higher-order abstract syntax, a supporting matching and unification algorithm, and some clients in Common Lisp in the framework of the Ergo project at Carnegie Mellon University.},
+	journal = {SIGPLAN Not.},
+	month = jun,
+	pages = {199–208},
+	numpages = {10}
+}
+
+@inproceedings{HOAS,
+	author = {Pfenning, F. and Elliott, C.},
+	title = {Higher-order abstract syntax},
+	year = {1988},
+	isbn = {0897912691},
+	publisher = {Association for Computing Machinery},
+	address = {New York, NY, USA},
+	url = {https://doi.org/10.1145/53990.54010},
+	doi = {10.1145/53990.54010},
+	abstract = {We describe motivation, design, use, and implementation of higher-order abstract syntax as a central representation for programs, formulas, rules, and other syntactic objects in program manipulation and other formal systems where matching and substitution or unification are central operations. Higher-order abstract syntax incorporates name binding information in a uniform and language generic way. Thus it acts as a powerful link integrating diverse tools in such formal environments. We have implemented higher-order abstract syntax, a supporting matching and unification algorithm, and some clients in Common Lisp in the framework of the Ergo project at Carnegie Mellon University.},
+	booktitle = {Proceedings of the ACM SIGPLAN 1988 Conference on Programming Language Design and Implementation},
+	pages = {199–208},
+	numpages = {10},
+	location = {Atlanta, Georgia, USA},
+	series = {PLDI '88}
+}
+

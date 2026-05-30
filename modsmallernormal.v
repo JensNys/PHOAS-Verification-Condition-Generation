@@ -1,0 +1,9 @@
+Require Import ZArith Psatz.
+Open Scope Z_scope.
+#[local] Hint Extern 1 => nia : arith_hints.
+
+Theorem modsmallernormal :
+(forall x0 : Z, (forall x1 : Z, (forall _ :True, (and (forall _ :(Z.lt x0 x1), (Z.lt x0 x1))(forall _ :(not (Z.lt x0 x1)), (exists x2 : Z, (exists x3 : Z, (and (and (eq x2 (Z.sub x0 x1))(and (eq x3 x1)True))(and True(forall x4 : Z, (forall _ :(Z.lt x4 x3), (Z.lt x4 x1)))))))))))).
+Proof.
+eauto 10 with arith_hints.
+Qed.

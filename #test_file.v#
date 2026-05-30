@@ -1,0 +1,15 @@
+Require Import ZArith Psatz.
+Open Scope Z_scope.
+#[local] Hint Extern 1 => nia : arith_hints.
+
+Theorem test_file :
+(forall x0 : Z, (forall _ :True, (exists x1 : Z, (and (and (eq x1 x0)True)(and True(forall x2 : Z, (forall _ :False, False))))))).
+Proof.
+intros.
+exists x0.
+split. eauto.
+split.
+eauto.
+intros.
+eauto 10 with arith_hints.
+Qed.

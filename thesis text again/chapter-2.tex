@@ -1,0 +1,257 @@
+\chapter{Verification condition generation}
+\label{cha:2}
+\textit{I will introduce the syntax and semantics of the programming language that I am writing the verification condition generation for. I will then describe the first order and higher order proposition languages and contracts written in them. Finally I will explain how the verification condition generation works.} 
+
+When writing a verification constraint generator you need some ingredients as input. We want to generate a formula that asserts whether a program satisfies its specification: executing the program from a state in which the precondition holds, always ends in a state in which the postcondition holds. This means we have to have a language in which the program is written, but we also need a language in which the pre and postconditions are written. For both of these, we both need a syntax and a semantics.
+
+
+\section{Programming language}
+\textit{Describe the syntax and semantics of the programming language of my vfc generator.}
+
+
+
+\subsection{Syntax}
+To describe the syntax of the programming language, we describe the datatype we use to represent it. A Program consists of a function that can take various input variables and then executes a statement that mentions these variables. Statements are either expressions, variable introduction with Let, variable reassignment with Assign, the executions of 2 statements sequentially after one another or a conditional control flow branch. Our language only has Integer values, so expressions are either integer literals, variables or integer operations of 2 expressions.
+
+
+\begin{minted}{haskell}
+
+--program variables
+type X = String
+--function names
+type F = String
+
+type Value = Int
+
+data Exp = Lit Value
+    | Var X
+    | Add Exp Exp
+    | Mul Exp Exp
+    | Minus Exp Exp
+  deriving (Eq,Show)
+  
+data Stm = Expr Exp
+    | Assign X Exp -- x := Stm (update a variable)
+    | Let X Exp Stm -- let X = Stm where Stm (make a new variable)
+    | Seq Stm Stm --e1;e2
+    | If Bexp Stm Stm -- if bexp then stm else stm
+  deriving (Eq,Show)
+
+data Relop = Equal | LessThan | GreaterThan | LessThanEqual | GreaterThanEqual
+
+data Prog = Fun F [X] Stm
+\end{minted}
+
+
+\subsection{Semantics}
+To describe a meaning to this syntax, we can give an interpreter for this language.
+
+\begin{itemize}
+    \item State: State: Consider the statement (Var “x”). It should have a different result if a previous assignment is made or not. We need an environment that keeps track of this state. This could lead to a function of type Stm->Env->Int. Since we sometimes can edit the environment, such as in an Assign statement, we could also return a tuple with the updated environment Stm->Env->(Int,Env). This can be made easier to work with by using a state monad. Then the return type can be Stm -> State Env Int
+    \item Failure (Maybe): If we come across a statement (Var “x”) but there is no “x” in the environment, what should we return? We add the possibility of failure to the result by returning a Maybe Int. Combining with the state monad by using a stateT transformer, the type for the interpreter becomes  Stm -> StateT (Store Value) Maybe Value
+\end{itemize}
+
+\section{Proposition languages}
+\textit{Describe the syntax of the first order, higher order and parametric higher order versions of the proposition languages. }
+\subsection{syntax}
+The proposition language of our language should represent first order logic expressions in which we have a way of comparing expressions.
+
+\subsubsection{HOAS propositions}
+A HOAS representation for these propositions would look like the following:
+
+\begin{minted}{haskell}
+data Prop = T 
+    | F 
+    | Not Prop
+    | And Prop Prop 
+    | Or Prop Prop 
+    | Implies Prop Prop
+    | Cmp Relop Value Value 
+    | Exist (Value->Prop) 
+    | Forall (Value->Prop)
+\end{minted}
+The unary and binary combinators are straight forwared. Variable introductions in Exist and Forall use the HOAS approach. The place where these introduced variables can occur are in the comparisons in the comparisons. Notice that our program still typechecks if we write a formula like this
+\begin{minted}{haskell}
+Forall (\x -> Cmp SmallerThan x (x+1))  
+\end{minted}
+We can write meta language "expressions" in our comparisons. This property is something we will want in our first order and parametric higher order propositions as well. 
+
+\subsubsection{phoas propositions}
+The phoas representation for propositions I'll be using has te following syntax:
+\begin{minted}{haskell}
+data Prop v = T 
+    | F 
+    | Not Prop
+    | And Prop Prop 
+    | Or Prop Prop 
+    | Implies Prop Prop
+    | Cmp Relop v v 
+    | Exist (Maybe String) (v->(Prop v))
+    | Forall (Maybe String) (v->(Prop v))
+\end{minted}
+
+Notice that if we ignore the Maybe String parameter for the quantifiers and we were to instantiate v with Value we would get a type equivalent to the HOAS propositions. We still have the advantage of having well-formedness . There are however some problems with the approach. 
+
+
+For example, if we don't assume anything else about the type v above, our comparisons could only compare variables against one another. We would not be able to compare if a variable is greater than 0. Therefore, in most of what is to come, we will expect that the type v has implemented the following typeclass:
+
+\begin{minted}{haskell}
+class ValueAlgebra v where
+    lit :: Value -> v
+    add :: v -> v -> v
+    minus :: v -> v -> v
+    mul :: v -> v -> v
+\end{minted}
+
+This way, if we assume the typeclass ValueAlgebra v we can write propositions like 
+\begin{minted}{haskell}
+Forall (\x -> Cmp SmallerThan x (add x (lit 1)))  
+\end{minted}
+
+Here we can compare expressions of variables instead of only variables.
+
+
+Another problem with this phoas approach is that printing out formulas or reasoning about equality of formulas is not easy. Also in the other direction, this way of writing propositions restricts us to using haskell to state the propositions since we use haskell's variable binding construct. Therefore it would be nice to have a first order representation that we could use to state our contract and read printed propositions from. Additionally it would be nice to be able to translate to and from these first order representation. Luckily, this is possible, as I will demonstrate in \ref{translation}. Since these translations will have to pick a string to represent the variables that are represented with meta-language variables here, we might want to "suggest" what the name of a variable might be if it were to be translated. Therefore, the quantifiers of our phoas type have an additional field in their constructor which we can be used to suggest a name for the introduced variable in case we were to translate the proposition. 
+
+\section{first order propositions}
+The first order representation for propositions I'll be using has the following syntax:
+
+\begin{minted}{haskell}
+data Prop v = T 
+    | F 
+    | Not Prop
+    | And Prop Prop 
+    | Or Prop Prop 
+    | Implies Prop Prop
+    | Cmp Relop Stm Stm 
+    | Exist string FoasProp 
+    | Forall string FoasProp
+\end{minted}
+
+Variables are represented as strings and comparisons are represented as expressions with 
+
+Notice that this approach allows for ill-formed propositions. For example, we could construct the following ill-formed proposition where we use "y" as a variable that is not introduced:
+\begin{minted}{haskell}
+Forall "x" (Cmp Equal "x" "y")
+\end{minted}
+
+
+
+
+\subsection{Translations \label{translation}}
+\textit{Describe the translations between Foas and PHOAS propositions}
+\subsubsection{From phoas to foas propositions}
+
+To translate a phoas proposition to a foas proposition, we can pick an instanitation for our type parameter that can help us in doing the translation. Since the foas comparisons happen between expressions and the phoas representation compares values of our type parameter, we can instantiate our type parameter with Exp. This makes our comparison case, where we use variables straight forward, since the expressions to compare will already be there.
+
+The introduction of variables in Forall and Exist is a little more involved. We need a way to come up with fresh variable names for the phoas variables that don't have  variable identity. These names should be fresh because otherwise variable shadowing might change the semantic meaning of a proposition. For example, if we were to pick every variable name the same as "x", then the formula "Forall Nothing (a -> Forall Nothing (b -> Cmp Equal a b)) (which is not true for values a:=1, b:=2) would translate to the formula "Forall "x" (Forall "x" (Cmp Equal (Var "x") (Var "x"))" which is a tautology. 
+
+To pick these names fresh we pass a integer parameter that we increment at each quantification so we can name our variables "x0", "x1", "x2",… if no name suggestion is given and we pick the suggestion if one is given. To avoid undefined behaviour, we assume that the suggestions don’t have the form “x Integer”. For this extra integer parameter, we can use a Reader monad to write our implementation using do notation. This gives us the following type signature.
+
+
+\begin{minted}{haskell}
+phoas_to_foas_reader :: PhoasProp Exp -> ReaderInt FoasProp
+\end{minted}
+
+
+We can obtain the translation from this by letting our integer parameter start with 0.
+
+\begin{minted}{haskell}
+phoas_to_foas :: PhoasProp Exp ->  FoasProp
+phoas_to_foas phoasProp = runReader (phoas_to_foas_reader phoasProp) 0
+\end{minted}
+
+Once we have a name for our variable, for example "x0", we can construct the expression (Var "x0") and provide it to our higher order function. This gives us back a phoas proposition, which we can recursively translate to a foas proposition. The code for this is the following:
+
+\begin{minted}{haskell}
+    do i <- ask
+      let arg = "x" ++ show i
+    
+      case m of
+        Nothing -> do --no suggestion provided, we pick arg as our fresh variable and increment i with 1.
+           body <- (local (+1) $ phoas_to_foas_reader $ (f (Var arg)))
+           return $ quantifier arg body
+    
+    
+    
+        Just s -> do -- a suggestion was provided, we use the suggestion.
+           body <-              (phoas_to_foas_reader $ (f  (Var s)))
+           return $ quantifier s body
+\end{minted}
+
+\textit{Perhaps the following simplified version is more readable by skipping the suggestion.}
+\begin{minted}{haskell}
+    do i <- ask
+      let arg = "x" ++ show i
+    
+       do 
+           body <- (local (+1) $ phoas_to_foas_reader $ (f (Var arg)))
+           return $ Forall arg body
+\end{minted}
+
+By using the reader monad, we obtain locally different names within a scope. For example, consider the following phoas proposition:
+
+\begin{minted}{haskell}
+PhoasAnd (PhoasForall Nothing (\a -> PhoasCmp Equal a a)) (PhoasExist Nothing (\a-> PhoasCmp Equal a a ))
+\end{minted}
+
+This will be translated to the following foas proposition:
+
+
+\begin{minted}{haskell}
+(And (Forall "x0" (Cmp Equal (Var "x0") (Var "x0"))) (Exist "x0" (Cmp Equal (Var "x0") (Var "x0"))))
+\end{minted}
+
+While these introduced variables have the same name, there will never be 2 variables with the same name in the same scope. Shadowing is therefore not a problem.
+
+
+However, if we want all introduced variables to have a different name, even if they are in different scopes we could use a state monad instead of the reader monad. In that case the example would be translated to
+\begin{minted}{haskell}
+(And (Forall "x0" (Cmp Equal (Var "x0") (Var "x0"))) (Exist "x1" (Cmp Equal (Var "x1") (Var "x1")))).
+\end{minted}
+
+
+\subsubsection{From foas to phoas propositions}
+
+The translation from a foas to a phoas proposition comes with some hickups. Since foas propositions can be ill-formed and phoas propositions can't, there are some foas propositions for which the translation will fail. This failure happens when a variable is used that is not introduced. The translation makes use of a helper function that maps introduced variable names to the logical variable we use to represent it in the phoas proposition. the translation from foas to phoas starts by having this map as empty and uses a helper function with the following type
+
+\begin{minted}{haskell}
+foas_to_phoas' :: ValueAlgebra a => FoasProp -> Map String a -> PhoasProp a
+
+
+\end{minted}
+
+
+The interesting cases happen when a variable is introduced and when it is used, as seen below. Notice how we introduce a meta language variable in the Forall case and put it in the store. When a variable is used in forall, we have to lift the expression of type Exp into an element of the arbitrary type. To do this, we interpret the expression into the arbitrary type by requiring the valueAlgebra interface to create expressions within that type.
+
+
+\begin{minted}{haskell}
+    
+foas_to_phoas' (FoasForall lvar p) env = PhoasForall (Just lvar) (\v -> foas_to_phoas' p (insert lvar v env))
+foas_to_phoas' (FoasCmp relop s1 s2) env = PhoasCmp relop (expression_to_algebra s1 env) (expression_to_algebra s2 env)
+\end{minted}
+
+
+
+
+
+
+
+
+
+
+
+\section{Generating verification conditions}
+
+
+
+
+
+
+Describe where my implementation differs from the hoas constraint generation described in the background chapter.
+
+If we want to verify a hoare triple {Pre} program {Post}, the postcondition usually says something about the obtained result. Lets say a program returns a type r, then our postcondition would have the form (r->Prop) where Prop is a proposition. The precondition can be any Proposition. Our constraint generator will work as follows: We get our program and a postcondition for our program. We will then, for every instruction, calculate the weakest precondition wp(program,post). This is the precondition such that for every other precondition Pre for which the hoare triple {Pre} program {Post} holds, Pre implies wp(program,post). Our verification condition will then be: “for all possible inputs, does our precondition imply wp(program(Input),post)”
+
+
+\subsection{}
+
