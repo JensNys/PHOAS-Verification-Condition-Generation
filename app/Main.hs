@@ -1,11 +1,11 @@
 module Main where
     
 --import Vcg.ProgrammingLanguage
-import Vcg.PropositionLanguages
-import Vcg.ConstraintGeneration
-import Vcg.Test
+import PropositionLanguages
+import ConstraintGeneration
+import Test
 
-import Vcg.Benchmark (runBenchmark)
+import Benchmark (runBenchmark)
 
 main :: IO ()
 main = runBenchmark--runTests

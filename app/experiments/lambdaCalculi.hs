@@ -163,6 +163,35 @@ run :: Foas_Exp -> Foas_Exp
 run a = if betaReduce a == a then a else run $ betaReduce a
 
 
+--------
+
+DB = DB {unDB :: Int -> DBTerm}
+
+
+instance UntypedLambda DB where
+    
+    lam f = DB $ λi → let v = λj → Var (j-(i+1)) in
+    Lam (unDB (f (DB v)) (i+1))
+    
+    app x y = DB $ λi → App (unDB x i) (unDB y i)
+    
+toTerm :: Hoas → DBTerm
+toTerm v = unDB v 0
+
+---
+
+type Phoas’ = ∀ exp.UntypedLambda exp ⇒ [exp] → exp
+
+fromTerm’ :: DBTerm → Phoas’
+fromTerm’ (Var i) env = env !! i
+fromTerm’ (Lam t) env = lam (λx → fromTerm’ t (x:env))
+fromTerm’ (App x y) env =
+fromTerm’ x env ‘app‘ fromTerm’ y env
+
+fromTerm :: DBTerm → Phoas
+fromTerm term = fromTerm’ term []
+
+
 
 
 -----------------------------
