@@ -67,6 +67,9 @@ executable project
         Benchmark
         Test
         ExampleContracts
+        Foas
+        Phoas
+        Hoas
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
