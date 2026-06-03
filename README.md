@@ -1,0 +1,1 @@
+This is the code developed for my master thesis. In the app directory you can find the development of a verification condition generator (VCG) in Haskell using a PHOAS representation to represent propositions. In the coq directory you can find a subset of this development and the main parts of a well-formedness proof of the result of this VCG.
