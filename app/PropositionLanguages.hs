@@ -22,12 +22,7 @@ import Documentation.SBV.Examples.Transformers.SymbolicEval (Env(result))
 
 
 
---expression algebra
-class ValueAlgebra v where
-    lit :: Value->v
-    add :: v -> v -> v
-    minus :: v -> v -> v
-    mul :: v -> v -> v
+
 
 -- typeclass for the operations on Values.
 instance ValueAlgebra Exp where
@@ -147,15 +142,15 @@ binary_prop_to_foas_reader p1 p2 bin = do r1 <- phoas_to_foas_reader p1
                                           r2 <- phoas_to_foas_reader p2
                                           return $ bin r1 r2
 ---------------------------------
-type StateInt v = State Int v
+type IntState v = State Int v
 
-phoas_to_foas_global :: Phoas.Prop (StateInt Exp) -> Foas.Prop
+phoas_to_foas_global :: Phoas.Prop (IntState Exp) -> Foas.Prop
 phoas_to_foas_global phoasProp = evalState (phoas_to_foas_state phoasProp) 0
 
 
 
 
-phoas_to_foas_state :: Phoas.Prop (StateInt Exp) -> StateInt Foas.Prop
+phoas_to_foas_state :: Phoas.Prop (IntState Exp) -> IntState Foas.Prop
 phoas_to_foas_state Phoas.T = return Foas.T
 phoas_to_foas_state Phoas.F = return Foas.F
 phoas_to_foas_state (Phoas.Cmp op l r) = do v1 <- l
@@ -173,7 +168,7 @@ phoas_to_foas_state (Phoas.Forall f)   = quantifiers_to_foas_state f Foas.Forall
 
 
 -- interprets a quantifier
-quantifiers_to_foas_state ::  ((StateInt Exp)->Phoas.Prop (StateInt Exp))->(LVar->Foas.Prop->Foas.Prop)->StateInt Foas.Prop
+quantifiers_to_foas_state ::  ((IntState Exp)->Phoas.Prop (IntState Exp))->(LVar->Foas.Prop->Foas.Prop)->IntState Foas.Prop
 quantifiers_to_foas_state f quantifier=do i <- get
                                           let arg = "x" ++ show i 
                                           modify (+1)
@@ -184,7 +179,7 @@ quantifiers_to_foas_state f quantifier=do i <- get
 
 
 --interprets a binary propositional operator.
-binary_prop_to_foas_state :: (Phoas.Prop (StateInt Exp))->(Phoas.Prop (StateInt Exp))->(Foas.Prop->Foas.Prop->Foas.Prop)->StateInt Foas.Prop
+binary_prop_to_foas_state :: (Phoas.Prop (IntState Exp))->(Phoas.Prop (IntState Exp))->(Foas.Prop->Foas.Prop->Foas.Prop)->IntState Foas.Prop
 binary_prop_to_foas_state p1 p2 bin = do r1 <- phoas_to_foas_state p1
                                          r2 <- phoas_to_foas_state p2
                                          return $ bin r1 r2
@@ -196,7 +191,7 @@ phoas_to_foas_state_exp phoasProp = evalState (phoas_to_foas_state' phoasProp) 0
 
 
 
-phoas_to_foas_state' :: Phoas.Prop Exp -> StateInt Foas.Prop
+phoas_to_foas_state' :: Phoas.Prop Exp -> IntState Foas.Prop
 phoas_to_foas_state' Phoas.T = return Foas.T
 phoas_to_foas_state' Phoas.F = return Foas.F
 phoas_to_foas_state' (Phoas.Cmp op l r) = return $ Foas.Cmp op l r
@@ -209,14 +204,14 @@ phoas_to_foas_state' (Phoas.Exist f)    = quantifiers_to_foas_state' f Foas.Exis
 phoas_to_foas_state' (Phoas.Forall f)   = quantifiers_to_foas_state' f Foas.Forall
 
 -- interprets a quantifier
-quantifiers_to_foas_state' ::  (( Exp)->Phoas.Prop ( Exp))->(LVar->Foas.Prop->Foas.Prop)->StateInt Foas.Prop
+quantifiers_to_foas_state' ::  (( Exp)->Phoas.Prop ( Exp))->(LVar->Foas.Prop->Foas.Prop)->IntState Foas.Prop
 quantifiers_to_foas_state' f quantifier=do i <- get
                                            let arg = "x" ++ show i 
                                            modify (+1)
                                            body <- (phoas_to_foas_state' $ (f (Var arg)))
                                            return $ quantifier arg body
 --interprets a binary propositional operator.
-binary_prop_to_foas_state' :: (Phoas.Prop ( Exp))->(Phoas.Prop ( Exp))->(Foas.Prop->Foas.Prop->Foas.Prop)->StateInt Foas.Prop
+binary_prop_to_foas_state' :: (Phoas.Prop ( Exp))->(Phoas.Prop ( Exp))->(Foas.Prop->Foas.Prop->Foas.Prop)->IntState Foas.Prop
 binary_prop_to_foas_state' p1 p2 bin = do r1 <- phoas_to_foas_state' p1
                                           r2 <- phoas_to_foas_state' p2
                                           return $ bin r1 r2

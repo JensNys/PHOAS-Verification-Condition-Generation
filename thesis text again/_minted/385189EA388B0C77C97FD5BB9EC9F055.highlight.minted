@@ -1,3 +1,0 @@
-\begin{MintedVerbatim}[commandchars=\\\{\}]
-\PYG{k+kt}{DBLam}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{DBApp}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{Var}\PYG{+w}{ }\PYG{l+m+mi}{0}\PYG{p}{)}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{DBLam}\PYG{+w}{ }\PYG{p}{(}\PYG{k+kt}{Var}\PYG{+w}{ }\PYG{l+m+mi}{1}\PYG{p}{)))}
-\end{MintedVerbatim}

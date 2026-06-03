@@ -1,5 +1,7 @@
 module Foas where 
     import ProgrammingLanguage
+    
+    -- logic variable
     type LVar = String
     data Prop = T
         | F

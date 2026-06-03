@@ -1,9 +1,0 @@
-\begin{MintedVerbatim}[commandchars=\\\{\}]
-\PYG{+w}{		}\PYG{p}{|}\PYG{+w}{ }\PYG{n}{Lambda}\PYG{+w}{ }\PYG{p}{(}\PYG{n}{Lam}\PYG{+w}{ }\PYG{p}{\PYGZhy{}\PYGZgt{}}\PYG{+w}{ }\PYG{n}{Lam}\PYG{p}{)}
-\PYG{+w}{		}
-\PYG{+w}{		}\PYG{n}{hoasI}\PYG{+w}{ }\PYG{p}{::}\PYG{+w}{ }\PYG{n}{Lam}
-\PYG{+w}{		}\PYG{n}{hoasI}\PYG{+w}{ }\PYG{p}{=}\PYG{+w}{ }\PYG{n}{Lambda}\PYG{+w}{ }\PYG{p}{(}\PYG{err}{\PYGZbs{}}\PYG{n}{x}\PYG{p}{\PYGZhy{}\PYGZgt{}}\PYG{n}{x}\PYG{p}{)}
-\PYG{+w}{		}
-\PYG{+w}{		}\PYG{n}{apply}\PYG{+w}{ }\PYG{p}{::}\PYG{+w}{ }\PYG{n}{Lam}
-\PYG{+w}{		}\PYG{n}{apply}\PYG{+w}{ }\PYG{p}{=}\PYG{+w}{ }\PYG{n}{Lambda}\PYG{+w}{ }\PYG{p}{(}\PYG{l+s}{\PYGZbs{}f}\PYG{+w}{ }\PYG{p}{\PYGZhy{}\PYGZgt{}}\PYG{+w}{ }\PYG{n}{Lambda}\PYG{+w}{ }\PYG{p}{(}\PYG{err}{\PYGZbs{}}\PYG{n}{x}\PYG{+w}{ }\PYG{p}{\PYGZhy{}\PYGZgt{}}\PYG{+w}{ }\PYG{n}{App}\PYG{+w}{ }\PYG{n}{f}\PYG{+w}{ }\PYG{n}{x}\PYG{p}{))}
-\end{MintedVerbatim}

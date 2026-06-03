@@ -10,3 +10,15 @@ module Phoas where
         | Implies (Prop v) (Prop v)
         | Exist (v->Prop v)
         | Forall (v->Prop v)
+
+        
+
+    --expression algebra
+    class ValueAlgebra v where
+        lit :: Value->v
+        add :: v -> v -> v
+        minus :: v -> v -> v
+        mul :: v -> v -> v
+
+    example :: ValueAlgebra v => Prop v
+    example = Forall (\x -> Cmp LessThanEqual x (add x (lit 1)))

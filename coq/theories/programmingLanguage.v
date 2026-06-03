@@ -400,7 +400,6 @@ Check Foas.wfprop.
   match c with
   | MkContract forallVar pre prog arg result post =>
       (Foas.wfprop (singleton forallVar) pre )*
-      (PL.wfProg prog) *
       (forallVar = arg) *
       (forallVar <> result) *
      ( Foas.wfprop (union (singleton forallVar) (singleton result)) post)
@@ -592,7 +591,6 @@ Inductive prop (A : Set) : Set :=
         wfContract  wfV w (ForallC f)
   | WfHoareTriple (pre : prop V) (program : PL.Prog) (arg:V) (post :V -> prop V):
         wfprop acc wfV w pre ->
-        PL.wfProg program ->
         wfV w arg ->
         (forall (result : V) w', acc w w' -> wfV w' result ->
           wfprop acc wfV w' (post result)) -> 
@@ -988,7 +986,7 @@ Proof.
   intros Hwf.
   destruct c as [forallVar pre prog arg result post].
   (* unfold the FOAS well-formedness *)
-  destruct Hwf as [[[[Hwfpre Hwfprog] Harg] Hresultname] Hwfpost].
+  destruct Hwf as [[[Hwfpre  Harg] Hresultname] Hwfpost].
   (* the translation wraps in ForallC *)
   simpl. apply WfForallC.
   intros v w' Hacc Hwfv.
@@ -1003,8 +1001,7 @@ Proof.
       rewrite lookup_singleton_Some in Hlookup.
       destruct Hlookup as [_ ->].
       exact Hwfv.
-  - (* program well-formed: direct from hypothesis *)
-    exact Hwfprog.
+
   - 
     exact Hwfv.
   - (* post well-formed: similar to pre, larger domain *)

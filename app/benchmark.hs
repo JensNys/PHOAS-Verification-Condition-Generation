@@ -285,16 +285,16 @@ benchmark_db_if  = sizeDBProp . vcFoas_db . benchmark_contract_if
 
 
 benchmark_values_linear :: Int-> [Int]
-benchmark_values_linear n = map (3*) [1..n]
+benchmark_values_linear n = map (+10) [1..n]
 
 runBenchmark :: IO ()
-runBenchmark = defaultMainWith (defaultConfig { csvFile = Just "if2.csv" }) $
+runBenchmark = defaultMainWith (defaultConfig { csvFile = Just "sequenced_if3.csv" }) $
   [ bgroup "if"
-      [ bgroup "reader reader" [ bench (show n) $ whnf benchmark_reader_reader_if n | n <- benchmark_values_linear 7 ]
-      , bgroup "reader exp"    [ bench (show n) $ whnf benchmark_reader_exp_if    n | n <- benchmark_values_linear 7 ]
-      , bgroup "state state"   [ bench (show n) $ whnf benchmark_state_state_if   n | n <- benchmark_values_linear 7 ]
-      , bgroup "state exp"     [ bench (show n) $ whnf benchmark_state_exp_if     n | n <- benchmark_values_linear 7 ]
-      , bgroup "db"            [ bench (show n) $ whnf benchmark_db_if             n | n <- benchmark_values_linear 7 ]
+      [ bgroup "reader reader" [ bench (show n) $ whnf benchmark_reader_reader_if n | n <- benchmark_values_linear 6 ]
+      , bgroup "reader exp"    [ bench (show n) $ whnf benchmark_reader_exp_if    n | n <- benchmark_values_linear 6]
+      , bgroup "state state"   [ bench (show n) $ whnf benchmark_state_state_if   n | n <- benchmark_values_linear 6 ]
+      , bgroup "state exp"     [ bench (show n) $ whnf benchmark_state_exp_if     n | n <- benchmark_values_linear 6 ]
+      , bgroup "db"            [ bench (show n) $ whnf benchmark_db_if             n | n <- benchmark_values_linear 6 ]
       ]
   ]
   
