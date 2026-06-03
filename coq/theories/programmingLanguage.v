@@ -1367,16 +1367,15 @@ Lemma wpWeakest : forall  (post : PL.Value->stringmap PL.Value->Phoas.prop PL.Va
   
   (Phoas.semant pre -> PL.evalStm initStore stm (result,endmap)-> Phoas.semant (post result endmap)) (*if pre is a precondition*)
   ->
-  (Phoas.semant pre -> Phoas.semant (wp PL.value_valueAlgebra stm post initStore) ). Admitted.
+  (Phoas.semant pre -> Phoas.semant (constraintGeneration.wp PL.value_valueAlgebra stm post initStore) ). Admitted.
 
-  Check wp.
-  Check Hoas.hoas_to_phoas.
+
 
   
 
 
   Lemma wpPreconditionHoas : forall  (post : PL.Value->Hoas.prop) (stm : PL.Stm)  (inp : PL.Value) (arg : string) result fname,       
-  (Phoas.semant (wp PL.value_valueAlgebra stm (weaken (Hoas.hoas_to_phoas ∘  post)) {[arg := inp]})) 
+  (Phoas.semant (constraintGeneration.wp PL.value_valueAlgebra stm (constraintGeneration.weaken' (Hoas.hoas_to_phoas ∘  post)) {[arg := inp]})) 
   ->
   (PL.evalProg (PL.Fun fname arg stm ) inp result)-> Hoas.semant (post result ). Admitted. (*if pre is a precondition*)
   
@@ -1429,13 +1428,13 @@ Lemma wpWeakest : forall  (post : PL.Value->stringmap PL.Value->Phoas.prop PL.Va
 
 
 
-  Definition adequate (c : Phoas.Contract PL.Value) : Hoas.semant (vc_hoas c)->  Hoas.contract_semant (Hoas.phoas_to_hoas_contract c).
+  Definition adequate (c : Phoas.Contract PL.Value) : Hoas.semant (constraintGeneration.vc_hoas c)->  Hoas.contract_semant (Hoas.phoas_to_hoas_contract c).
   Proof.
   
   unfold Hoas.contract_semant.
   intros.
   (*intros.*)
-  unfold vc_hoas in H.
+  unfold constraintGeneration.vc_hoas in H.
   
   simpl in H.
   apply translation_irrelevance in H0.
@@ -1446,10 +1445,7 @@ Lemma wpWeakest : forall  (post : PL.Value->stringmap PL.Value->Phoas.prop PL.Va
   specialize (H inp).
   rewrite H3 in H.
   
-  Check (weaken
-               (λ result : PL.Value,
-                  Hoas.hoas_to_phoas
-                    (post inp result))).
+  
   Check (λ result : PL.Value,
                   Hoas.hoas_to_phoas
                     (post inp result)).
@@ -1460,8 +1456,8 @@ Lemma wpWeakest : forall  (post : PL.Value->stringmap PL.Value->Phoas.prop PL.Va
   apply Hwp.
   - intros. apply H in H1.
     unfold "∘".
-    pose proof (Hoas.preserves_semantics (wp PL.value_valueAlgebra body
-              (weaken
+    pose proof (Hoas.preserves_semantics (constraintGeneration.wp PL.value_valueAlgebra body
+              (constraintGeneration.weaken'
                 (λ result : PL.Value,
                     Hoas.hoas_to_phoas (post inp result)))
               {[param := inp]})).
@@ -1488,20 +1484,4 @@ Lemma wpWeakest : forall  (post : PL.Value->stringmap PL.Value->Phoas.prop PL.Va
   
 
 
-  
-  (*this definition throws away the v, while p can depend on v.*)
-  Lemma semantForall : forall (V:Set) (p : Phoas.prop V) (f: V-> Phoas.prop V), f =(fun v=>p) -> semantp (Phoas.Forall f) -> forall v', semantp (f v'). Admitted. 
-  
-  Definition satisfies_post_angelic (V:Set) (post: V->stringmap V->Phoas.prop V)(t : (V * stringmap V)) : Phoas.prop V :=
-  match t with 
-  | (v,s) => post v s
-  end.
-  
-  
-  
-  (*when extending to dealing with lists, the argument given to prog refers to the value associated with the values in forallVar. Right now, we ignore arg because we know it must be the string mentioned in forallVar.*)
-  Definition contract_semant (contract:Foas.Contract) : Prop := forall  forallVar pre stm arg resultName post result endStore fName,  contract=Foas.MkContract forallVar pre (PL.Fun fName arg stm ) forallVar resultName post -> forall inp, (Foas.semant (singleton forallVar inp) pre) -> PL.evalStm stm (listmap.singleton arg inp) (result,endStore) -> Foas.semant (listmap.double forallVar inp resultName result) post. 
-  
-  
-  Lemma adequacy (contract:Foas.Contract) : 
-  Foas.semant nil (vc_foas contract) -> adequate contract.
+
