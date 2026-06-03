@@ -148,25 +148,12 @@ intros x H.
     
     
       
-  
-  
-  (*match (lookup x s) with
-                  |Some v => v
-                  |None => match proof with 
-                                | VarScoped _ _ contains_proof => 
-                                    (* Use contains_proof to derive a contradiction *)
-                                    False_rect value (contains_implies_lookup_some x s contains_proof)
-                            end
-                  end*)
+
 End PL.
   
   
 
 
-
-
-
-(*------------------------------------------------------*)
 
 Inductive Relop : Set :=
   | Equal
@@ -209,13 +196,6 @@ Module Foas.
     wfprop (union Γ (singleton x)) body ->
     wfprop Γ (Foas.Forall x body).
     
-    
-    (*
-    | WfForall  : forall (body : prop), (forall (x : string),
-      wfprop (union Γ (singleton x)) body ->
-      wfprop Γ (Foas.Forall x body)).
-    *)
-    
   
   
   
@@ -235,14 +215,7 @@ Check Foas.wfprop.
 
 
 
-  (*
-
-  *)
-     Locate "->".
-     
-     
-    (*Fixpoint (r:Relop)*)
-    Check Z.lt.
+  
     
     
     Lemma variable_introduction_domain :forall (V:Set) (store : stringmap V) x arg, (dom store ∪ {[x]}) = (dom (<[x:=arg]> store)) .
@@ -265,71 +238,11 @@ Check Foas.wfprop.
     end.
    
     
-    (*this states falsely that everything is well_scoped*)
-    
-     (*
-     Fixpoint semant (s:debruijnmap.debruijnmap PL.Value) (p : Foas.prop) (proof : WellScopedProp s p)  : Prop :=
-    match proof with
-      | TrueScoped _ => True
-      | FalseScoped _ => False
-      | ImpliesScoped l r  =>forall _ : (semant l), (semant r)
-      | AndScoped l r => and  (semant l) (semant r)
-      | OrScoped l r => or (semant l) (semant r)
-      |@Foas.ForallScoped _ _ _ H => forall arg, semant (H arg)
-      | CmpScoped comparison l r => (semant_Relop comparison) (PL.interp l) (PL.interp r) 
-    end.
-     *)
-    
-
 
     
 
      Set Printing Implicit.
-    (*
-    Lemma ForallSemant : forall s body H, @semant s (Foas.Forall body) (@ForallScoped _ _ _ H) -> forall arg, semant (H arg).
-    Proof.
-      intros.
-      apply H0. 
-    Qed.
-
-
-    Lemma ImpliesSemant : forall  s l r Hl Hr, @semant s (Foas.Implies l r) (ImpliesScoped Hl Hr) -> @semant s l Hl -> @semant s r Hr.
-    Proof.
-      intros.
-      exact (H H0).
-    Qed.
     
-    
-    *)
-    
-      
-     
-(*
-Fixpoint string_to_Prop (var :string) : Prop :=
-  forall var, (Z.add var 1 = Z.of_nat 3).
-
-Inductive mini : Set :=
-  | miniCmp (a : string) 
-  | miniForall (var:string ) (p :  mini).
-  Fixpoint mini_to_Prop (m:mini) : Prop:=
-  match m with
-    |miniCmp a => (Z.add a 1 =  Z.of_nat 3)
-    |miniForall var p => forall var, mini_to_Prop p
-  end.
-Check string_to_prop "x".
-  Lemma naam:string_to_prop "x".
-
-
-  Fixpoint propToProp (p : prop) : Prop :=
-  match prop with
-    | T => True
-    | F => False
-    | Cmp r l r => 
-    | Implies l r => 
-    | And l r =>
-    | Or l r =>
-    | Forall (var:string ) (p :  prop).
-    *)
   
   
 End Foas.
@@ -433,22 +346,6 @@ Class WF_VA (World : Type) (V:Set) (VA: PL.ValueAlgebra V)
     wf_lit : forall Γ n, WA Γ (PL.lit n);
     wf_add : forall Γ v1 v2, WA Γ v1 -> WA Γ v2 -> WA Γ (PL.add v1 v2);
 }.
-
-(*
-Inductive wfValueAlgebraLemma (World : Type) (V:Set) (WA : WF World V) (Γ : World) : (PL.ValueAlgebra V) -> Type :=
-  | WfLit : forall n,  wfValueAlgebraLemma ()
-  | WfAdd e1 e2 :
-        wfValueAlgebraLemma e1 ->
-        wfValueAlgebraLemma e2 ->
-        wfValueAlgebraLemma (Add e1 e2).
-
-        
-fun VA => (exists n, WA Γ (PL.lit n) ).
-
-
-Inductive wfValueAlgebra (World : Type) (V:Set) (WA : WF World V) : WF World (PL.ValueAlgebra V) :=
-  fun Γ VA => (exists n, WA Γ (PL.lit n) ).
-*)
 
 
 
@@ -702,74 +599,17 @@ Admitted.
   
 
 
-  (*
-  
-  *)
 
   
 
 
-  (*
-  Lemma wf_foas_to_phoas (A:Set) (VA:PL.ValueAlgebra A) (R : stringset → A → Type ) (store : stringmap A) (Γ : stringset) (fprop : Foas.prop) (wfp : Foas.wfprop Γ fprop) :
-     (Γ = dom store) -> Phoas.wfprop R (dom store) (foas_to_phoas VA store wfp).
-  Proof.
-  intros.
-    induction wfp. cbn.
-    - constructor.
-    - constructor.
-    - constructor; auto.
-    - constructor; auto.
-    - constructor; auto.
-    - constructor.
-      apply X.
-      + set_solver.
-      + 
-      constructor.
-      set_solver.
-    - constructor; auto.
-  Qed.
-
-  *)
-    
-    
-
- 
-  (*
-  
-*)
      
-     
-   
-   
-   (* tbcCheck phoas_to_foas (Foas.foas_to_phoas simplePropScoped). *)
-   
   
    Definition simpleProp : Foas.prop  := Foas.Forall "x" 
                                                 
                                                  (Foas.Cmp SmallerThan (PL.Lit 0%Z) (PL.Var "x")).
      
 
-  (*
-  Lemma name : forall context store, @WfStore (PL.Exp) stringset exp_elem_of context store.
-  unfold WfStore.
-  intros.
-  
-  unfold R_elem_of.
-  unfold exp_elem_of.
-  destruct v.
-  - 
-  eapply H.
-
-Lemma name : forall context store, @WfStore (R PL.Exp) stringset R_elem_of context store.
-  unfold WfStore.
-  intros.
-  
-  unfold R_elem_of.
-  unfold exp_elem_of.
-
-  eauto.
-
-  *)
   
   
   Lemma wf_lit_expR: forall Γ n, wfr Γ (PL.lit n).
@@ -1139,14 +979,7 @@ Definition Wf_Wstore (V A:Set)  (wfV :WF World V) (wfA : WF World A) : WF World 
   fun post store => post tt (delete varname store).
   
 
-  (*
-  Inductive WfExp : WF World PL.Exp :=
-| WfLit n : WfExp Γ (Lit n)
-| WfAdd e1 e2 :
-  WfExp Γ e1 ->
-  WfExp Γ e2 ->
-  WfExp Γ (Add e1 e2).
-*)
+
   Fixpoint WfExpfp (wfString : WF World string) (w : World) (e : PL.Exp) : Type :=
   match e with
   | PL.Lit n     => True
@@ -1388,26 +1221,6 @@ Lemma wpWeakest : forall  (post : PL.Value->stringmap PL.Value->Phoas.prop PL.Va
 
 
 
-  (*Lemma wpPrecondition : forall  (post : PL.Value->stringmap PL.Value->Phoas.prop PL.Value) (stm : PL.Stm) (pre : Phoas.prop PL.Value) (inp : PL.Value) (arg : string) result fname,       
-  (Hoas.semant pre -> Hoas.semant  )  
-  ->
-  (Hoas.semant pre -> PL.evalProg (PL.Fun fname arg stm ) inp result)-> Phoas.semant (post result ∅  ). Admitted.
-  
-  
-  *)
-  
-  
-(*
-
-*)
-
-
-  (*
- 
-  
-  *)
-
-
 
   
 
@@ -1465,11 +1278,6 @@ Lemma wpWeakest : forall  (post : PL.Value->stringmap PL.Value->Phoas.prop PL.Va
     
     rewrite H4 in H1.
     exact H1.        
-            
-    (*I would think i could finish with rewrite H5 in H4 (simplifiying H4) and then exact H4.*)
-    
-    (*rewrite H5 in H4. apply H4.*)
-    
     - intros. exact H2.
 
   Qed.
