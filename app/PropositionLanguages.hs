@@ -16,9 +16,7 @@ import Documentation.SBV.Examples.Transformers.SymbolicEval (Env(result))
 
 
 
--- we define the syntax for Assertions
-
--- assumes the maybe string isn't of the form "x" ++ show i for an integer i.
+-- we defined the syntax for Propositions in the Foas, Hoas and Phoas modules. In this file we define translations and helper functions between these. Additionally we define contract syntax.
 
 
 
@@ -371,41 +369,6 @@ expression_to_algebra (Minus s1 s2) env = minus (expression_to_algebra s1 env) (
 
 
 
-{- class Proposition p a where
-  true :: p
-  false :: p
-  cmp :: Relop->a->a->p
-  and :: p->p->p
-  or :: p->p->p
-  implies ::  p->p->p
-  exist :: (a->p)->p
-  forAll :: (a->p)->p
-
-type Phoas.Proposition = forall a. forall p. Proposition p a => p -}
-
-{- stm_to_parametric :: ValueAlgebra v => Stm -> v
-stm_to_parametric (Lit v) = lit v
-    | Var X
-    | Add Stm Stm
-    | Mul Stm Stm
-    | Minus Stm Stm
-    | Assign X Stm -- x := Stm (update a variable)
-    | Let X Stm Stm -- let X = Stm where Stm (make a new variable)
-    | Seq Stm Stm --e1;e2
-    | If Bexp Stm Stm -- if bexp then stm else stm -}
-
-
-
-{- foas_to_phoas :: ValueAlgebra v => Foas.Prop->Phoas.Prop v
-foas_to_phoas Foas.T = Phoas.T 
-foas_to_phoas Foas.F    | Phoas.F 
-foas_to_phoas Foas.Cmp   | Phoas.Cmp Relop v v  -- these can be both LVars as values 
-foas_to_phoas Foas.Not p   | Phoas.Not (foas_to_phoas p)
-foas_to_phoas Foas.And p1 p2   | Phoas.And (foas_to_phoas p1) (foas_to_phoas p2)
-foas_to_phoas Foas.Or    | Phoas.Or (foas_to_phoas p1) (foas_to_phoas p2)
-foas_to_phoas    | Phoas.Implies (foas_to_phoas p) (foas_to_phoas p)
-foas_to_phoas    | Phoas.Exist (Maybe String) (v->(Phoas.Prop v))
-foas_to_phoas    | Phoas.Forall (Maybe String) (v->(Phoas.Prop v)) -}
 
 
 
