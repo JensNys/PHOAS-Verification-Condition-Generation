@@ -23,14 +23,12 @@ tests = TestList [test1,test2,test3,test4,test5,test6,test7,test8,test9,test10,t
 
 
 
-propVerifier :: String -> Foas.Prop-> Test
-propVerifier name prop = 
-    TestCase $ do
-                    
-                    makeCoqFile name prop
-                    (exitCode, _, stderr) <- readProcessWithExitCode "coqc" [name ++ ".v"] ""
-                    assertEqual ("Coq verification failed:\n" ++ stderr) ExitSuccess exitCode
-
+propVerifier :: String -> Foas.Prop -> Test
+propVerifier name prop =
+  TestCase $ do
+    makeCoqFile name prop
+    (exitCode, _, stderr) <- readProcessWithExitCode "rocq" ["c", name ++ ".v"] ""
+    assertEqual ("Coq verification failed:\n" ++ stderr) ExitSuccess exitCode
 
 
 
