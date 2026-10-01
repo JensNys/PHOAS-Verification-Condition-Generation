@@ -1,4 +1,4 @@
-From Coq Require Import
+From Stdlib Require Import
   Classes.Morphisms
   NArith.BinNat
   Relations.Relation_Definitions
@@ -411,7 +411,7 @@ dependent induction wfFoas.
   destruct (decide (s = x)) as [-> | Hne].
 * (* s = x, so lookup returns a *)
   Check lookup_insert.
-  rewrite lookup_insert in Hlookup.
+  rewrite lookup_insert_eq in Hlookup.
   injection Hlookup as <-.
   apply X0.
 * rewrite lookup_insert_ne in Hlookup.
@@ -1230,8 +1230,9 @@ Lemma wpWeakest : forall  (post : PL.Value->stringmap PL.Value->Phoas.prop PL.Va
   -> 
        c = Phoas.ForallC (λ v : PL.Value,
        Phoas.HoareTriple (Hoas.hoas_to_phoas (pre v)) prog v (fun result => Hoas.hoas_to_phoas (post v result))).
-       intros.
+       
     Proof.
+    intros.
     pose proof (f_equal Hoas.hoas_to_phoas_contract H) as H'.
     pose proof (Hoas.inverse_contract c) as H''.
     rewrite H'' in H'.
